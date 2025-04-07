@@ -26,6 +26,21 @@ sh scripts/std_ppo_craftax.sh
 
 
 ## Implemented Algorithms
+### Standard RL
+|        **Algorithm**        |           **Benchmark**          | **Backbone** |                                **Code**                                |  **Remark**  |
+|:---------------------------:|:--------------------------------:|:------------:|:----------------------------------------------------------------------:|:------------:|
+|           Vanilla           | Craftax (State), Procgen (Pixel) |      PPO     | [ppo_craftax_vanilla.py](./plasticine/standard/ppo_craftax_vanilla.py) |      N/A     |
+|        Shrink+Perturb       | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_sp.py](./plasticine/standard/ppo_craftax_sp.py)      | Intermittent |
+|    Resetting final layer    | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_rf.py](./plasticine/standard/ppo_craftax_rf.py)      | Intermittent |
+|     Plasticity Injection    | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_pi.py](./plasticine/standard/ppo_craftax_pi.py)      | Intermittent |
+|             ReDo            | Craftax (State), Procgen (Pixel) |      PPO     |    [ppo_craftax_redo.py](./plasticine/standard/ppo_craftax_redo.py)    | Intermittent |
+| Continual Backpropagation   | Craftax (State), Procgen (Pixel) |      PPO     |     [ppo_craftax_cbp.py](./plasticine/standard/ppo_craftax_cbp.py)     |  Continuous  |
+|       L2 Normalization      | Craftax (State), Procgen (Pixel) |      PPO     |     [ppo_craftax_l2n.py](./plasticine/standard/ppo_craftax_l2n.py)     |  Continuous  |
+|     Layer Normalization     | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_ln.py](./plasticine/standard/ppo_craftax_ln.py)      |  Continuous  |
+| Regenerative Regularization | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_rr.py](./plasticine/standard/ppo_craftax_rr.py)      |  Continuous  |
+|     Soft Shrink+Perturb     | Craftax (State), Procgen (Pixel) |      PPO     |     [ppo_craftax_ssp.py](./plasticine/standard/ppo_craftax_ssp.py)     |  Continuous  |
+
+### Continual RL
 
 ## Dataset
 

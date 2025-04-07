@@ -109,7 +109,7 @@ def compute_weight_magnitude(model: torch.nn.Module) -> torch.Tensor:
     for param in model.parameters():
         l2_norm_squared += torch.sum(param**2)
         num_params += param.numel()
-    return torch.sqrt(torch.tensor(l2_norm_squared) / num_params)
+    return torch.sqrt(torch.Tensor(l2_norm_squared) / num_params)
 
 
 def compute_l2_norm_difference(current_model: torch.nn.Module, prev_model_state: Dict) -> torch.Tensor:
@@ -137,7 +137,7 @@ def compute_l2_norm_difference(current_model: torch.nn.Module, prev_model_state:
                 f"Saved initial state does not contain parameters '{name}'."
             )
 
-    return torch.sqrt(torch.tensor(l2_diff) / num_params)
+    return torch.sqrt(torch.Tensor(l2_diff) / num_params)
 
 
 def save_model_state(model: torch.nn.Module) -> Dict:

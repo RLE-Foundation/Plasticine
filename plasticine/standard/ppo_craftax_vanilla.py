@@ -116,13 +116,10 @@ class Agent(nn.Module):
         # generate the encoder
         return nn.Sequential(
             layer_init(nn.Linear(self.obs_shape[0], 512)),
-            nn.LayerNorm(512),
             nn.Tanh(),
             layer_init(nn.Linear(512, 512)),
-            nn.LayerNorm(512),
             nn.Tanh(),
             layer_init(nn.Linear(512, 512)),
-            nn.LayerNorm(512),
             nn.Tanh(),
         )
 
