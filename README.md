@@ -5,10 +5,10 @@
 
 </div>
 
-**Plasticine** is a library that provides high-quality single-file implementations of plasticity optimization algorithms in deep reinforcement learning. 
+**Plasticine** is a library that provides high-quality and single-file implementations of plasticity optimization algorithms in deep reinforcement learning. 
 
 
-> **Plasticine** is built on the top of [CleanRL](https://github.com/vwxyzjn/cleanrl).
+> **Plasticine** is built on the top of [CleanRL](https://github.com/vwxyzjn/cleanrl). Thanks for the excellent project!
 
 ## Quick Start
 - Create an environment and install the dependencies:
