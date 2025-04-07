@@ -1,0 +1,16 @@
+jax[cuda12_pip]
+distrax
+optax
+flax
+numpy
+black
+pre-commit
+argparse
+wandb
+orbax-checkpoint==0.5.0
+pygame
+gymnax
+chex
+matplotlib
+imageio
+craftax
