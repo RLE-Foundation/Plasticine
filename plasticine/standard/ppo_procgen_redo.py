@@ -82,7 +82,7 @@ class Args:
     # ReDo specific arguments
     redo_tau: float = 0.025
     """the weight of the ReDo loss"""
-    redo_frequency: int = 1
+    redo_frequency: int = 10
     """the frequency of the ReDo operation"""
 
     # to be filled in runtime
@@ -227,7 +227,7 @@ def redo_reset(model, batch_obs, tau):
         modules = dict(model.named_modules())
 
         for enc_sub in ['encoder.0', 'encoder.1', 'encoder.2']:
-            # dummy links to illustrate the concept
+            # Use dummy links to illustrate the concept
             links = [
                 [f'{enc_sub}.conv',               f'{enc_sub}.res_block0.block.0', f'{enc_sub}.res_block0.block.1'],
                 [f'{enc_sub}.res_block0.block.1', f'{enc_sub}.res_block0.block.2', f'{enc_sub}.res_block0.block.3'],
@@ -487,8 +487,6 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-
-        redo_reset(agent, b_obs[mb_inds], args.redo_tau)
 
         # ReDo operation
         if iteration % args.redo_frequency == 0 and iteration > 1:
