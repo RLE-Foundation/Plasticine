@@ -1,3 +1,5 @@
+# Based on: https://github.com/awjuliani/deep-rl-plasticity
+
 import torch
 
 from typing import Dict

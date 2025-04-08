@@ -27,18 +27,24 @@ sh scripts/std_ppo_craftax.sh
 
 ## Implemented Algorithms
 ### Standard RL
-|        **Algorithm**        |           **Benchmark**          | **Backbone** |                                **Code**                                |  **Remark**  |
-|:---------------------------:|:--------------------------------:|:------------:|:----------------------------------------------------------------------:|:------------:|
-|           Vanilla           | Craftax (State), Procgen (Pixel) |      PPO     | [ppo_craftax_vanilla.py](./plasticine/standard/ppo_craftax_vanilla.py) |      N/A     |
-|        Shrink+Perturb       | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_sp.py](./plasticine/standard/ppo_craftax_sp.py)      | Intermittent |
-|    Resetting final layer    | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_rf.py](./plasticine/standard/ppo_craftax_rf.py)      | Intermittent |
-|     Plasticity Injection    | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_pi.py](./plasticine/standard/ppo_craftax_pi.py)      | Intermittent |
-|             ReDo            | Craftax (State), Procgen (Pixel) |      PPO     |    [ppo_craftax_redo.py](./plasticine/standard/ppo_craftax_redo.py)    | Intermittent |
-| Continual Backpropagation   | Craftax (State), Procgen (Pixel) |      PPO     |     [ppo_craftax_cbp.py](./plasticine/standard/ppo_craftax_cbp.py)     |  Continuous  |
-|       L2 Normalization      | Craftax (State), Procgen (Pixel) |      PPO     |     [ppo_craftax_l2n.py](./plasticine/standard/ppo_craftax_l2n.py)     |  Continuous  |
-|     Layer Normalization     | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_ln.py](./plasticine/standard/ppo_craftax_ln.py)      |  Continuous  |
-| Regenerative Regularization | Craftax (State), Procgen (Pixel) |      PPO     |      [ppo_craftax_rr.py](./plasticine/standard/ppo_craftax_rr.py)      |  Continuous  |
-|     Soft Shrink+Perturb     | Craftax (State), Procgen (Pixel) |      PPO     |     [ppo_craftax_ssp.py](./plasticine/standard/ppo_craftax_ssp.py)     |  Continuous  |
+
+| **Algorithm**               | **Benchmark**                    | **Backbone** | **Code**                                                                                                                                       | **Remark**   |
+|-----------------------------|----------------------------------|--------------|------------------------------------------------------------------------------------------------------------------------------------------------|--------------|
+| Vanilla                     | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_vanilla.py](./plasticine/standard/ppo_craftax_vanilla.py), [ppo_procgen_vanilla.py](./plasticine/standard/ppo_procgen_vanilla.py) | N/A          |
+| Shrink+Perturb              | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_sp.py](./plasticine/standard/ppo_craftax_sp.py),[ppo_procgen_sp.py](./plasticine/standard/ppo_procgen_sp.py)                      | Intermittent |
+| Resetting final layer       | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_rf.py](./plasticine/standard/ppo_craftax_rf.py),[ppo_procgen_rf.py](./plasticine/standard/ppo_procgen_rf.py)                      | Intermittent |
+| Plasticity Injection        | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_pi.py](./plasticine/standard/ppo_craftax_pi.py),[ppo_procgen_pi.py](./plasticine/standard/ppo_procgen_pi.py)                      | Intermittent |
+| ReDo                        | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_redo.py](./plasticine/standard/ppo_craftax_redo.py),[ppo_procgen_redo.py](./plasticine/standard/ppo_procgen_redo.py)              | Intermittent |
+| Continual Backpropagation   | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_cbp.py](./plasticine/standard/ppo_craftax_cbp.py),                                                                                | Continuous   |
+| L2 Normalization            | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_l2n.py](./plasticine/standard/ppo_craftax_l2n.py),[ppo_procgen_l2n.py](./plasticine/standard/ppo_procgen_l2n.py)                  | Continuous   |
+| Layer Normalization         | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_ln.py](./plasticine/standard/ppo_craftax_ln.py),[ppo_procgen_ln.py](./plasticine/standard/ppo_procgen_ln.py)                      | Continuous   |
+| Regenerative Regularization | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_rr.py](./plasticine/standard/ppo_craftax_rr.py),[ppo_procgen_rr.py](./plasticine/standard/ppo_procgen_rr.py)                      | Continuous   |
+| Soft Shrink+Perturb         | Craftax (State), Procgen (Pixel) | PPO          | [ppo_craftax_ssp.py](./plasticine/standard/ppo_craftax_ssp.py),[ppo_procgen_ssp.py](./plasticine/standard/ppo_procgen_ssp.py)                  | Continuous   |
+| CReLU Activation            | Procgen (Pixel)                  | PPO          | [ppo_procgen_ca.py](./plasticine/standard/ppo_procgen_ca.py)                                                                                   | Continuous   |
+
+- `Intermittent`: The method is applied only at specific points during training.
+- `Continuous`: The method is applied at every step of optimization.
+
 
 ### Continual RL
 

@@ -1,26 +1,20 @@
-# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_ataripy
+# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_procgenpy
 import os
-os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'  
-os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 import random
 import time
 from dataclasses import dataclass
 
+import gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import tyro
-import jax
-
+from procgen import ProcgenEnv
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
+from copy import deepcopy
 
-
-from craftax.craftax_env import make_craftax_env_from_name
-from plasticine.craftax_wrappers import (LogWrapper, 
-                                         OptimisticResetVecEnvWrapper
-                                         )
 from plasticine.metrics import (compute_dormant_units, 
                                 compute_stable_rank, 
                                 compute_effective_rank, 
@@ -51,25 +45,25 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "Craftax-Symbolic-v1"
+    env_id: str = "starpilot"
     """the id of the environment"""
-    total_timesteps: int = 100000000
+    total_timesteps: int = int(25e6)
     """total timesteps of the experiments"""
-    learning_rate: float = 2e-4
+    learning_rate: float = 5e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 1024
+    num_envs: int = 64
     """the number of parallel game environments"""
-    num_steps: int = 64
+    num_steps: int = 256
     """the number of steps to run in each environment per policy rollout"""
-    anneal_lr: bool = True
+    anneal_lr: bool = False
     """Toggle learning rate annealing for policy and value networks"""
-    gamma: float = 0.99
+    gamma: float = 0.999
     """the discount factor gamma"""
-    gae_lambda: float = 0.8
+    gae_lambda: float = 0.95
     """the lambda for the general advantage estimation"""
     num_minibatches: int = 8
     """the number of mini-batches"""
-    update_epochs: int = 4
+    update_epochs: int = 3
     """the K epochs to update the policy"""
     norm_adv: bool = True
     """Toggles advantages normalization"""
@@ -81,14 +75,10 @@ class Args:
     """coefficient of the entropy"""
     vf_coef: float = 0.5
     """coefficient of the value function"""
-    max_grad_norm: float = 1.0
+    max_grad_norm: float = 0.5
     """the maximum norm for the gradient clipping"""
     target_kl: float = None
     """the target KL divergence threshold"""
-
-    # l2 norm arguments
-    weight_decay: float = 1e-3
-    """the weight decay coefficient"""
 
     # to be filled in runtime
     batch_size: int = 0
@@ -105,53 +95,93 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 
-class Agent(nn.Module):
-    def __init__(self, obs_shape, action_dim):
+# taken from https://github.com/AIcrowd/neurips2020-procgen-starter-kit/blob/142d09586d2272a17f44481a115c4bd817cf6a94/models/impala_cnn_torch.py
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
         super().__init__()
-        self.action_dim = action_dim
-        self.obs_shape = obs_shape
+        self.conv0 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
 
-        self.policy_encoder = self.gen_encoder()
-        self.policy = self.gen_policy(action_dim)
-        self.value_encoder = self.gen_encoder()
+    def forward(self, x):
+        inputs = x
+        x = nn.functional.relu(x)
+        x = self.conv0(x)
+        x = nn.functional.relu(x)
+        x = self.conv1(x)
+        return x + inputs
+
+
+class ConvSequence(nn.Module):
+    def __init__(self, input_shape, out_channels):
+        super().__init__()
+        self._input_shape = input_shape
+        self._out_channels = out_channels
+        self.conv = nn.Conv2d(in_channels=self._input_shape[0], out_channels=self._out_channels, kernel_size=3, padding=1)
+        self.res_block0 = ResidualBlock(self._out_channels)
+        self.res_block1 = ResidualBlock(self._out_channels)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = nn.functional.max_pool2d(x, kernel_size=3, stride=2, padding=1)
+        x = self.res_block0(x)
+        x = self.res_block1(x)
+        assert x.shape[1:] == self.get_output_shape()
+        return x
+
+    def get_output_shape(self):
+        _c, h, w = self._input_shape
+        return (self._out_channels, (h + 1) // 2, (w + 1) // 2)
+
+
+class Agent(nn.Module):
+    def __init__(self, envs):
+        super().__init__()
+        self.obs_shape = envs.single_observation_space.shape
+        self.action_dim = envs.single_action_space.n
+
+        self.encoder = self.gen_encoder()
+        self.policy = self.gen_policy()
         self.value = self.gen_value()
 
     def gen_encoder(self):
-        # generate the encoder
-        return nn.Sequential(
-            layer_init(nn.Linear(self.obs_shape[0], 512)),
-            nn.Tanh(),
-            layer_init(nn.Linear(512, 512)),
-            nn.Tanh(),
-            layer_init(nn.Linear(512, 512)),
-            nn.Tanh(),
-        )
+        h, w, c = self.obs_shape
+        shape = (c, h, w)
+        conv_seqs = []
+        for out_channels in [16, 32, 32]:
+            conv_seq = ConvSequence(shape, out_channels)
+            shape = conv_seq.get_output_shape()
+            conv_seqs.append(conv_seq)
+        conv_seqs += [
+            nn.Flatten(),
+            nn.ReLU(),
+            nn.Linear(in_features=shape[0] * shape[1] * shape[2], out_features=256),
+            nn.ReLU(),
+        ]
+        return nn.Sequential(*conv_seqs)
 
-    def gen_policy(self, action_dim):
-        return layer_init(nn.Linear(512, action_dim), std=0.01)
-
+    def gen_policy(self):
+        return layer_init(nn.Linear(256, self.action_dim), std=0.01)
+    
     def gen_value(self):
-        return layer_init(nn.Linear(512, 1), std=1.0)
+        return layer_init(nn.Linear(256, 1), std=1)
 
     def get_value(self, x):
-        return self.value(self.value_encoder(x))
+        return self.value(self.encoder(x.permute((0, 3, 1, 2)) / 255.0))  # "bhwc" -> "bchw"
 
     def get_action_and_value(self, x, action=None, check=False):
-        policy_x = self.policy_encoder(x)
-        value_x = self.value_encoder(x)
-
-        logits = self.policy(policy_x)
+        hidden = self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
+        logits = self.policy(hidden)
         probs = Categorical(logits=logits)
         if action is None:
             action = probs.sample()
 
         if check:
             with torch.no_grad():
-                dead_units = compute_dormant_units(policy_x, 'tanh') + compute_dormant_units(value_x, 'tanh')
-                stable_rank = compute_stable_rank(policy_x) + compute_stable_rank(value_x)
-                effective_rank = compute_effective_rank(policy_x) + compute_effective_rank(value_x)
-                feature_norm = compute_feature_norm(policy_x) + compute_feature_norm(value_x)
-                feature_var = compute_feature_variance(policy_x) + compute_feature_variance(value_x)
+                dead_units = compute_dormant_units(hidden, 'relu')
+                stable_rank = compute_stable_rank(hidden)
+                effective_rank = compute_effective_rank(hidden)
+                feature_norm = compute_feature_norm(hidden)
+                feature_var = compute_feature_variance(hidden)
                 plasticity_metrics = {
                     "dormant_units": dead_units.item(),
                     "stable_rank": stable_rank.item(),
@@ -159,9 +189,38 @@ class Agent(nn.Module):
                     "feature_norm": feature_norm.item(),
                     "feature_var": feature_var.item(),
                 }
-            return action, probs.log_prob(action), probs.entropy(), self.value(value_x), plasticity_metrics
+            return action, probs.log_prob(action), probs.entropy(), self.value(hidden), plasticity_metrics
         else:
-            return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
+            return action, probs.log_prob(action), probs.entropy(), self.value(hidden)
+
+    def inject(self):
+        self.policy = Injector(self.policy, 256, self.action_dim)
+        self.value = Injector(self.value, 256, 1)
+        self.policy.to(next(self.parameters()).device)
+        self.value.to(next(self.parameters()).device)
+
+class Injector(nn.Module):
+    def __init__(self, original, in_size=256, out_size=10):
+        super(Injector, self).__init__()
+        if type(original) == nn.Linear:
+            self.original = original
+        elif type(original) == Injector:
+            self.original = nn.Linear(in_size, out_size)
+            aw = original.original.weight
+            bw = original.new_a.weight
+            cw = original.new_b.weight
+            self.original.weight = nn.Parameter(aw + bw - cw)
+            ab = original.original.bias
+            bb = original.new_a.bias
+            cb = original.new_b.bias
+            self.original.bias = nn.Parameter(ab + bb - cb)
+        else:
+            raise NotImplementedError
+        self.new_a = nn.Linear(in_size, out_size)
+        self.new_b = deepcopy(self.new_a)
+
+    def forward(self, x):
+        return self.original(x) + self.new_a(x) - self.new_b(x).detach()
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -181,7 +240,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_craftax_l2n_runs'
+    log_dir = 'std_ppo_procgen_pi_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -197,22 +256,24 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
-    env = make_craftax_env_from_name(args.env_id, False)
-    env_params = env.default_params
-    env = LogWrapper(env)
-    env = OptimisticResetVecEnvWrapper(env, num_envs=args.num_envs, reset_ratio=min(16, args.num_envs))
-    obs_shape = env.observation_space(env_params).shape
-    action_shape = env.action_space(env_params).shape
-    action_dim = env.action_space(env_params).n
+    envs = ProcgenEnv(num_envs=args.num_envs, env_name=args.env_id, num_levels=0, start_level=0, distribution_mode="easy")
+    envs = gym.wrappers.TransformObservation(envs, lambda obs: obs["rgb"])
+    envs.single_action_space = envs.action_space
+    envs.single_observation_space = envs.observation_space["rgb"]
+    envs.is_vector_env = True
+    envs = gym.wrappers.RecordEpisodeStatistics(envs)
+    if args.capture_video:
+        envs = gym.wrappers.RecordVideo(envs, f"videos/{run_name}")
+    envs = gym.wrappers.NormalizeReward(envs, gamma=args.gamma)
+    envs = gym.wrappers.TransformReward(envs, lambda reward: np.clip(reward, -10, 10))
+    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-    # agent setup
-    agent = Agent(obs_shape=obs_shape, action_dim=action_dim).to(device)
-    # L2 regularization
-    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5, weight_decay=args.weight_decay)
+    agent = Agent(envs).to(device)
+    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs) + obs_shape).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) + action_shape).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
+    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -221,10 +282,7 @@ if __name__ == "__main__":
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
-    rng = jax.random.PRNGKey(args.seed)
-    rng, _rng = jax.random.split(rng)
-    next_obs, env_state = env.reset(_rng, env_params)
-    next_obs = torch.from_numpy(np.array(next_obs)).to(device)
+    next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
     for iteration in range(1, args.num_iterations + 1):
@@ -247,23 +305,16 @@ if __name__ == "__main__":
             logprobs[step] = logprob
 
             # TRY NOT TO MODIFY: execute the game and log data.
-            rng, _rng = jax.random.split(rng)
-            next_obs, env_state, reward_e, done, infos = env.step(
-                _rng, env_state, action.cpu().numpy(), env_params
-            )
-            next_done = done 
-            rewards[step] = torch.from_numpy(np.array(reward_e)).to(device).view(-1)
-            next_obs = torch.from_numpy(np.array(next_obs)).to(device)
-            next_done = torch.from_numpy(np.array(next_done)).float().to(device)
+            next_obs, reward, next_done, info = envs.step(action.cpu().numpy())
+            rewards[step] = torch.tensor(reward).to(device).view(-1)
+            next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
 
-            if True in done:
-                # gather all the episode returns and lengths with done=True
-                tag_idx = np.nonzero(done)[0][0]
-                eps_return = np.array(infos['returned_episode_returns'][tag_idx])
-                eps_length = np.array(infos['returned_episode_lengths'][tag_idx])
-                print(f"global_step={global_step}, episodic_return={eps_return}")
-                writer.add_scalar("charts/episodic_return", eps_return, global_step)
-                writer.add_scalar("charts/episodic_length", eps_length, global_step)
+            for item in info:
+                if "episode" in item.keys():
+                    print(f"global_step={global_step}, episodic_return={item['episode']['r']}")
+                    writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
+                    writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
+                    break
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -282,9 +333,9 @@ if __name__ == "__main__":
             returns = advantages + values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,) + obs_shape)
+        b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + action_shape)
+        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
@@ -304,13 +355,12 @@ if __name__ == "__main__":
         # copy the agent
         agent_copy = save_model_state(agent)
 
-        # update the agent
         for epoch in range(args.update_epochs):
             np.random.shuffle(b_inds)
             for start in range(0, args.batch_size, args.minibatch_size):
                 end = start + args.minibatch_size
                 mb_inds = b_inds[start:end]
-                # set check as True to get the plasticity metrics
+
                 _, newlogprob, entropy, newvalue, plasticity_metrics = agent.get_action_and_value(b_obs[mb_inds], b_actions.long()[mb_inds], check=True)
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
@@ -368,6 +418,11 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        # plasticity injection at the middle of training
+        if iteration % (args.num_iterations // 2) == 0:
+            # inject plasticity
+            agent.inject()
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
