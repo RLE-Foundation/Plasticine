@@ -10,7 +10,7 @@
 - 📜 Single-file implementation;
 - 🏞️ Support **Standard** and **Continual** RL Scenarios;
 - 📊 Benchmarked Implementation (10+ algorithms and 7+ plasticity metrics);
-- 📈 Tensorboard Logging;
+- 🧱 Easy combination of different strategies;
 - ⚙️ Local Reproducibility via Seeding;
 - 🧫 Experiment Management with [Weights and Biases]().
 
@@ -51,6 +51,25 @@ sh scripts/std_ppo_craftax.sh
 
 
 ### Continual RL
+
+|        **Algorithm**        |  **Benchmark**  | **Backbone** |                                 **Code**                                |  **Remark**  |
+|:---------------------------:|:---------------:|:------------:|:-----------------------------------------------------------------------:|:------------:|
+|           Vanilla           | Procgen (Pixel) |      PPO     | [ppo_procgen_vanilla.py](./plasticine/continual/ppo_procgen_vanilla.py) |      N/A     |
+|        Shrink+Perturb       | Procgen (Pixel) |      PPO     |      [ppo_procgen_sp.py](./plasticine/continual/ppo_procgen_sp.py)      | Intermittent |
+|     Plasticity Injection    | Procgen (Pixel) |      PPO     |      [ppo_procgen_pi.py](./plasticine/continual/ppo_procgen_pi.py)      | Intermittent |
+|             ReDo            | Procgen (Pixel) |      PPO     |    [ppo_procgen_redo.py](./plasticine/continual/ppo_procgen_redo.py)    | Intermittent |
+|    Resetting Final Layer    | Procgen (Pixel) |      PPO     |     [ppo_procgen_rfl.py](./plasticine/continual/ppo_procgen_rfl.py)     | Intermittent |
+|     Resetting All Layer     | Procgen (Pixel) |      PPO     |     [ppo_procgen_ral.py](./plasticine/continual/ppo_procgen_ral.py)     | Intermittent |
+|             TRAC            | Procgen (Pixel) |      PPO     |      [ppo_procgen_trac.py](./plasticine/continual/ppo_procgen_trac.py)      |  Continuous  |
+|       L2 Normalization      | Procgen (Pixel) |      PPO     |     [ppo_procgen_l2n.py](./plasticine/continual/ppo_procgen_l2n.py)     |  Continuous  |
+|     Layer Normalization     | Procgen (Pixel) |      PPO     |      [ppo_procgen_ln.py](./plasticine/continual/ppo_procgen_ln.py)      |  Continuous  |
+| Regenerative Regularization | Procgen (Pixel) |      PPO     |      [ppo_procgen_rr.py](./plasticine/continual/ppo_procgen_rr.py)      |  Continuous  |
+|     Soft Shrink+Perturb     | Procgen (Pixel) |      PPO     |     [ppo_procgen_ssp.py](./plasticine/continual/ppo_procgen_ssp.py)     |  Continuous  |
+|       CReLU Activation      | Procgen (Pixel) |      PPO     |      [ppo_procgen_ca.py](./plasticine/continual/ppo_procgen_ca.py)      |  Continuous  |
+
+- `Intermittent`: The method is applied only at specific points during training.
+- `Continuous`: The method is applied at every step of optimization.
+
 
 ## Dataset
 
