@@ -88,9 +88,9 @@ class Args:
 
     # ReDo specific arguments
     redo_tau: float = 0.05
-    # the weight of the ReDo loss
+    """the weight of the ReDo loss"""
     redo_frequency: int = 1
-    # the frequency of the ReDo operation
+    """the frequency of the ReDo operation"""
 
     # to be filled in runtime
     batch_size: int = 0

@@ -79,6 +79,12 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
+    # ReDo specific arguments
+    redo_tau: float = 0.025
+    """the weight of the ReDo loss"""
+    redo_frequency: int = 1
+    """the frequency of the ReDo operation"""
+
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -98,16 +104,15 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
-        self.conv0 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
-        self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        self.block = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv2d(channels, channels, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(channels, channels, kernel_size=3, padding=1),
+        )
 
     def forward(self, x):
-        inputs = x
-        x = nn.functional.relu(x)
-        x = self.conv0(x)
-        x = nn.functional.relu(x)
-        x = self.conv1(x)
-        return x + inputs
+        return self.block(x) + x
 
 
 class ConvSequence(nn.Module):
@@ -192,6 +197,99 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(hidden)
 
+    def forward(self, x):
+        """
+        Forward pass through the model, used for ReDo operation.
+        """
+        hidden = self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
+        logits = self.policy(hidden)
+        value = self.value(hidden)
+
+        return logits, value
+    
+
+def redo_reset(model, batch_obs, tau):
+    """
+    Apply the ReDo operation to the model.
+
+    Args:
+        model (torch.nn.Module): The model to be modified.
+        batch_obs (torch.Tensor): The batch of observations.
+        tau (float): The threshold for the ReDo operation.
+
+    Returns:
+        None
+    """
+
+    print(model)
+    with torch.no_grad():
+        s_scores_dict = compute_neuron_scores(model, batch_obs)
+        modules = dict(model.named_modules())
+
+        for enc_sub in ['encoder.0', 'encoder.1', 'encoder.2']:
+            # dummy links to illustrate the concept
+            links = [
+                [f'{enc_sub}.conv',               f'{enc_sub}.res_block0.block.0', f'{enc_sub}.res_block0.block.1'],
+                [f'{enc_sub}.res_block0.block.1', f'{enc_sub}.res_block0.block.2', f'{enc_sub}.res_block0.block.3'],
+                [f'{enc_sub}.res_block0.block.3', f'{enc_sub}.res_block1.block.0', f'{enc_sub}.res_block1.block.1'],
+                [f'{enc_sub}.res_block1.block.1', f'{enc_sub}.res_block1.block.2', f'{enc_sub}.res_block1.block.3'],
+            ]
+            for link in links:
+                s_scores = s_scores_dict[link[1]]
+                reset_mask = s_scores <= tau
+                reinitialize_weights(modules[link[0]], reset_mask, modules[link[1]])
+
+
+def compute_neuron_scores(model, data):
+    # Create a dictionary to store the s scores for each layer
+    s_scores_dict = {}
+
+    # Register a forward hook to capture the activations of each layer
+    activations = {}
+    hooks = []
+
+    def hook(module, input, output):
+        activations[module] = output.detach()
+
+    for name, module in model.named_modules():
+        if isinstance(module, torch.nn.ReLU):
+            handle = module.register_forward_hook(hook)
+            hooks.append(handle)
+
+    # Forward pass through the model
+    model(data)
+
+    # Calculate the s scores for each layer
+    for name, module in model.named_modules():
+        if isinstance(module, torch.nn.ReLU):
+            layer_activations = activations[module]
+            s_scores = layer_activations / (torch.mean(layer_activations, axis=1, keepdim=True) + 1e-6)
+            s_scores = torch.mean(s_scores, axis=0)
+            s_scores = torch.mean(s_scores, axis=tuple(range(1, len(s_scores.shape))))
+            s_scores_dict[name] = s_scores
+
+    # Remove the hooks to prevent memory leaks
+    for handle in hooks:
+        handle.remove()
+
+    return s_scores_dict
+
+def reinitialize_weights(module, reset_mask, next_module):
+    """
+    Reinitializes weights and biases of a module based on a reset mask.
+
+    Args:
+        module (torch.nn.Module): The module whose weights are to be reinitialized.
+        reset_mask (torch.Tensor): A boolean tensor indicating which weights to reset.
+    """
+    # Reinitialize weights
+    new_weights = torch.empty_like(module.weight.data)
+    torch.nn.init.kaiming_uniform_(new_weights, a=np.sqrt(5))
+    module.weight.data[reset_mask] = new_weights[reset_mask].to(module.weight.device)
+
+    # Set outgoing weights to zero for reset neurons
+    if type(module) == type(next_module):
+        next_module.weight.data[:, reset_mask] = 0.0
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -211,7 +309,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_procgen_vanilla_runs'
+    log_dir = 'std_ppo_procgen_redo_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -389,6 +487,12 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        redo_reset(agent, b_obs[mb_inds], args.redo_tau)
+
+        # ReDo operation
+        if iteration % args.redo_frequency == 0 and iteration > 1:
+            redo_reset(agent, b_obs[mb_inds], args.redo_tau)
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
