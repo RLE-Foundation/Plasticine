@@ -56,7 +56,7 @@ sh scripts/std_ppo_craftax.sh
 
 ### Continual RL
 
-|        **Algorithm**        |  **Benchmark**  | **Backbone** |                                 **Code**                                |  **Remark**  |
+|        **Algorithm**        |  **Benchmark**  | **Backbone** |                                 **Code**                                |  **Frequency**  |
 |:---------------------------:|:---------------:|:------------:|:-----------------------------------------------------------------------:|:------------:|
 |           Vanilla           | Procgen (Pixel) |      PPO     | [ppo_procgen_vanilla.py](./plasticine/continual/ppo_procgen_vanilla.py) |      N/A     |
 |        Shrink+Perturb       | Procgen (Pixel) |      PPO     |      [ppo_procgen_sp.py](./plasticine/continual/ppo_procgen_sp.py)      | Intermittent |
