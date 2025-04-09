@@ -11,7 +11,7 @@
 **Plasticine** is a library that provides high-quality and single-file implementations of plasticity optimization algorithms in deep reinforcement learning. We highlight the features of **Plasticine** as follows:
 - 📜 Single-file implementation;
 - 🏞️ Support **Standard** and **Continual** RL Scenarios;
-- 📊 Benchmarked Implementation (10+ algorithms and 7+ plasticity metrics);
+- 📊 Benchmarked Implementation (13+ algorithms and 8+ plasticity metrics);
 - 🧱 Easy combination of different strategies;
 - ⚙️ Local Reproducibility via Seeding;
 - 🧫 Experiment Management with [Weights and Biases]().
@@ -35,45 +35,41 @@ sh scripts/std_ppo_craftax.sh
 ```
 
 
-## Implemented Algorithms
-### Standard RL
+## Implemented Algorithms and Metrics
 
-|        **Algorithm**        |                     **Benchmark**                    | **Backbone** |                                                                                                         **Code**                                                                                                         |  **Frequency**  |
-|:---------------------------:|:----------------------------------------------------:|:------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------:|
-|           Vanilla           | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   | [ppo_craftax_vanilla.py](./plasticine/standard/ppo_craftax_vanilla.py)<br>[ppo_procgen_vanilla.py](./plasticine/standard/ppo_procgen_vanilla.py)<br>[td3_mujoco_vanilla.py](./plasticine/standard/td3_mujoco_vanilla.py) |      N/A     |
-|        Shrink+Perturb       |          Craftax (State)<br>Procgen (Pixel)          |      PPO     |                                               [ppo_craftax_sp.py](./plasticine/standard/ppo_craftax_sp.py)<br>[ppo_procgen_sp.py](./plasticine/standard/ppo_procgen_sp.py)                                               | Intermittent |
-|     Plasticity Injection    | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |                [ppo_craftax_pi.py](./plasticine/standard/ppo_craftax_pi.py)<br>[ppo_procgen_pi.py](./plasticine/standard/ppo_procgen_pi.py)<br>[td3_mujoco_pi.py](./plasticine/standard/td3_mujoco_pi.py)                | Intermittent |
-|             ReDo            | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |          [ppo_craftax_redo.py](./plasticine/standard/ppo_craftax_redo.py)<br>[ppo_procgen_redo.py](./plasticine/standard/ppo_procgen_redo.py)<br>[td3_mujoco_redo.py](./plasticine/standard/td3_mujoco_redo.py)          | Intermittent |
-|       L2 Normalization      | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |             [ppo_craftax_l2n.py](./plasticine/standard/ppo_craftax_l2n.py)<br>[ppo_procgen_l2n.py](./plasticine/standard/ppo_procgen_l2n.py)<br>[td3_mujoco_l2n.py](./plasticine/standard/td3_mujoco_l2n.py)             |  Continuous  |
-|     Layer Normalization     | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |                [ppo_craftax_ln.py](./plasticine/standard/ppo_craftax_ln.py)<br>[ppo_procgen_ln.py](./plasticine/standard/ppo_procgen_ln.py)<br>[td3_mujoco_ln.py](./plasticine/standard/td3_mujoco_ln.py)                |  Continuous  |
-| Regenerative Regularization | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |                [ppo_craftax_rr.py](./plasticine/standard/ppo_craftax_rr.py)<br>[ppo_procgen_rr.py](./plasticine/standard/ppo_procgen_rr.py)<br>[td3_mujoco_rr.py](./plasticine/standard/td3_mujoco_rr.py)                |  Continuous  |
-|     Soft Shrink+Perturb     | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |             [ppo_craftax_ssp.py](./plasticine/standard/ppo_craftax_ssp.py)<br>[ppo_procgen_ssp.py](./plasticine/standard/ppo_procgen_ssp.py)<br>[td3_mujoco_ssp.py](./plasticine/standard/td3_mujoco_ssp.py)             |  Continuous  |
-|       CReLU Activation      |           Procgen (Pixel)<br>Mujoco (State)          |   PPO, TD3   |                 [ppo_procgen_ca.py](./plasticine/standard/ppo_procgen_ca.py)<br>[td3_mujoco_ca.py](./plasticine/standard/td3_mujoco_ca.py)                 |  Continuous  |
+- Plasticity optimization algorithms:
 
-- `Intermittent`: The method is applied only at specific points during training.
-- `Continuous`: The method is applied at every step of optimization.
+|        **Algorithm**        |         **Remark**        |                                                                                  **Standard**                                                                                 |                                                     **Continual**                                                    |                      **Open-ended**                     |
+|:---------------------------:|:-------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------:|
+|           Vanilla           |            N/A            | [PPO+Procgen](./plasticine/standard/ppo_procgen_vanilla.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_vanilla.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_vanilla.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_vanilla.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_vanilla.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_vanilla.py) |
+|      Shrink and Perturb     | Reset-based Interventions |       [PPO+Procgen](./plasticine/standard/ppo_procgen_snp.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_snp.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_snp.py)       |     [PPO+Procgen](./plasticine/continual/ppo_procgen_snp.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_snp.py)     |   [PPO+Craftax](./plasticine/open/ppo_craftax_snp.py)   |
+|     Plasticity Injection    | Reset-based Interventions |         [PPO+Procgen](./plasticine/standard/ppo_procgen_pi.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_pi.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_pi.py)        |      [PPO+Procgen](./plasticine/continual/ppo_procgen_pi.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_pi.py)      |    [PPO+Craftax](./plasticine/open/ppo_craftax_pi.py)   |
+|             ReDo            | Reset-based Interventions |      [PPO+Procgen](./plasticine/standard/ppo_procgen_redo.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_redo.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_redo.py)     |    [PPO+Procgen](./plasticine/continual/ppo_procgen_redo.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_redo.py)    |   [PPO+Craftax](./plasticine/open/ppo_craftax_redo.py)  |
+|       Resetting Layer       | Reset-based Interventions |         [PPO+Procgen](./plasticine/standard/ppo_procgen_rl.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_rl.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_rl.py)        |      [PPO+Procgen](./plasticine/continual/ppo_procgen_rl.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_rl.py)      |    [PPO+Craftax](./plasticine/open/ppo_craftax_rl.py)   |
+|     Layer Normalization     |        Normlization       |         [PPO+Procgen](./plasticine/standard/ppo_procgen_ln.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_ln.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_ln.py)        |      [PPO+Procgen](./plasticine/continual/ppo_procgen_ln.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_ln.py)      |    [PPO+Craftax](./plasticine/open/ppo_craftax_ln.py)   |
+|    Normalize-and-Project    |        Normlization       |       [PPO+Procgen](./plasticine/standard/ppo_procgen_nap.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_nap.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_nap.py)       |     [PPO+Procgen](./plasticine/continual/ppo_procgen_nap.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_nap.py)     |   [PPO+Craftax](./plasticine/open/ppo_craftax_nap.py)   |
+|       L2 Normalization      |       Regularization      |       [PPO+Procgen](./plasticine/standard/ppo_procgen_l2n.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_l2n.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_l2n.py)       |     [PPO+Procgen](./plasticine/continual/ppo_procgen_l2n.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_l2n.py)     |   [PPO+Craftax](./plasticine/open/ppo_craftax_l2n.py)   |
+| Regenerative Regularization |       Regularization      |         [PPO+Procgen](./plasticine/standard/ppo_procgen_rr.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_rr.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_rr.py)        |      [PPO+Procgen](./plasticine/continual/ppo_procgen_rr.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_rr.py)      |    [PPO+Craftax](./plasticine/open/ppo_craftax_rr.py)   |
+|   Parseval Regularization   |       Regularization      |         [PPO+Procgen](./plasticine/standard/ppo_procgen_pr.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_pr.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_pr.py)        |      [PPO+Procgen](./plasticine/continual/ppo_procgen_pr.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_pr.py)      |    [PPO+Craftax](./plasticine/open/ppo_craftax_pr.py)   |
+|       CReLU Activation      |         Activation        |         [PPO+Procgen](./plasticine/standard/ppo_procgen_ca.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_ca.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_ca.py)        |      [PPO+Procgen](./plasticine/continual/ppo_procgen_ca.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_ca.py)      |    [PPO+Craftax](./plasticine/open/ppo_craftax_ca.py)   |
+|    Deep Fourier Features    |         Activation        |       [PPO+Procgen](./plasticine/standard/ppo_procgen_dff.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_dff.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_dff.py)       |     [PPO+Procgen](./plasticine/continual/ppo_procgen_dff.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_dff.py)     |   [PPO+Craftax](./plasticine/open/ppo_craftax_dff.py)   |
+|             TRAC            |         Optimizer         |      [PPO+Procgen](./plasticine/standard/ppo_procgen_trac.py)<br>[PQN+Atari](./plasticine/standard/pqn_atari_trac.py)<br>[TD3+DMC](./plasticine/standard/td3_dmc_trac.py)     |    [PPO+Procgen](./plasticine/continual/ppo_procgen_trac.py)<br>[TD3+DMC](./plasticine/continual/td3_dmc_trac.py)    |   [PPO+Craftax](./plasticine/open/ppo_craftax_trac.py)  |
 
 
-### Continual RL
+- Evalution metrics:
 
-|        **Algorithm**        |  **Benchmark**  | **Backbone** |                                 **Code**                                |  **Frequency**  |
-|:---------------------------:|:---------------:|:------------:|:-----------------------------------------------------------------------:|:------------:|
-|           Vanilla           | Procgen (Pixel) |      PPO     | [ppo_procgen_vanilla.py](./plasticine/continual/ppo_procgen_vanilla.py) |      N/A     |
-|        Shrink+Perturb       | Procgen (Pixel) |      PPO     |      [ppo_procgen_sp.py](./plasticine/continual/ppo_procgen_sp.py)      | Intermittent |
-|     Plasticity Injection    | Procgen (Pixel) |      PPO     |      [ppo_procgen_pi.py](./plasticine/continual/ppo_procgen_pi.py)      | Intermittent |
-|             ReDo            | Procgen (Pixel) |      PPO     |    [ppo_procgen_redo.py](./plasticine/continual/ppo_procgen_redo.py)    | Intermittent |
-|    Resetting Final Layer    | Procgen (Pixel) |      PPO     |     [ppo_procgen_rfl.py](./plasticine/continual/ppo_procgen_rfl.py)     | Intermittent |
-|     Resetting All Layer     | Procgen (Pixel) |      PPO     |     [ppo_procgen_ral.py](./plasticine/continual/ppo_procgen_ral.py)     | Intermittent |
-|             TRAC            | Procgen (Pixel) |      PPO     |      [ppo_procgen_trac.py](./plasticine/continual/ppo_procgen_trac.py)      |  Continuous  |
-|       L2 Normalization      | Procgen (Pixel) |      PPO     |     [ppo_procgen_l2n.py](./plasticine/continual/ppo_procgen_l2n.py)     |  Continuous  |
-|     Layer Normalization     | Procgen (Pixel) |      PPO     |      [ppo_procgen_ln.py](./plasticine/continual/ppo_procgen_ln.py)      |  Continuous  |
-| Regenerative Regularization | Procgen (Pixel) |      PPO     |      [ppo_procgen_rr.py](./plasticine/continual/ppo_procgen_rr.py)      |  Continuous  |
-|     Soft Shrink+Perturb     | Procgen (Pixel) |      PPO     |     [ppo_procgen_ssp.py](./plasticine/continual/ppo_procgen_ssp.py)     |  Continuous  |
-|       CReLU Activation      | Procgen (Pixel) |      PPO     |      [ppo_procgen_ca.py](./plasticine/continual/ppo_procgen_ca.py)      |  Continuous  |
-
-- `Intermittent`: The method is applied only at specific points during training.
-- `Continuous`: The method is applied at every step of optimization.
-
+|         **Metric**         | **Remark** |
+|:--------------------------:|:----------:|
+|   Ratio of Dormant Units   |            |
+| Fraction of Inactive Units |            |
+|         Stable Rank        |            |
+|       Effective Rank       |            |
+|      Weight Magnitude      |            |
+|      Weight Difference     |            |
+|        Gradient Norm       |            |
+|        Feature Norm        |            |
+|      Feature Variance      |            |
+|       Policy Entropy       |            |
 
 ## Dataset
 
