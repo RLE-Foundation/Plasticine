@@ -48,7 +48,7 @@ sh scripts/std_ppo_craftax.sh
 |     Layer Normalization     | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |                [ppo_craftax_ln.py](./plasticine/standard/ppo_craftax_ln.py)<br>[ppo_procgen_ln.py](./plasticine/standard/ppo_procgen_ln.py)<br>[td3_mujoco_ln.py](./plasticine/standard/td3_mujoco_ln.py)                |  Continuous  |
 | Regenerative Regularization | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |                [ppo_craftax_rr.py](./plasticine/standard/ppo_craftax_rr.py)<br>[ppo_procgen_rr.py](./plasticine/standard/ppo_procgen_rr.py)<br>[td3_mujoco_rr.py](./plasticine/standard/td3_mujoco_rr.py)                |  Continuous  |
 |     Soft Shrink+Perturb     | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   |             [ppo_craftax_ssp.py](./plasticine/standard/ppo_craftax_ssp.py)<br>[ppo_procgen_ssp.py](./plasticine/standard/ppo_procgen_ssp.py)<br>[td3_mujoco_ssp.py](./plasticine/standard/td3_mujoco_ssp.py)             |  Continuous  |
-|       CReLU Activation      |           Procgen (Pixel)<br>Mujoco (State)          |   PPO, TD3   |                 [ppo_procgen_ca.py](./plasticine/standard/ppo_procgen_ca.py)<br>[td3_mujoco_ca.py](./plasticine/standard/td3_mujoco_ca.py)<br>[td3_mujoco_ca.py](./plasticine/standard/td3_mujoco_ca.py)                 |  Continuous  |
+|       CReLU Activation      |           Procgen (Pixel)<br>Mujoco (State)          |   PPO, TD3   |                 [ppo_procgen_ca.py](./plasticine/standard/ppo_procgen_ca.py)<br>[td3_mujoco_ca.py](./plasticine/standard/td3_mujoco_ca.py)                 |  Continuous  |
 
 - `Intermittent`: The method is applied only at specific points during training.
 - `Continuous`: The method is applied at every step of optimization.
@@ -78,6 +78,13 @@ sh scripts/std_ppo_craftax.sh
 ## Dataset
 
 ## Discussion and Contribution
+
+- For discussion and questions:
+  + [GitHub issues](https://github.com/RLE-Foundation/Plasticine/issues)
+  + [Discord channel](https://discord.gg/swMV6kgV)
+
+- For contribution:
+  - Read the `CONTRIBUTING.md` before contributing to the project!
 
 ## Cite Us
 If you use Plasticine in your work, please cite our paper:
