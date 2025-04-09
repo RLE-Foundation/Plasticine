@@ -2,7 +2,9 @@
 <p align="center"><img align="center" width="500px" src="assets/logo.png"></p>
 
 ## Plasticine: Clean Plasticity Optimization in Deep Reinforcement Learning
-<img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> 
+<img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> <a href="https://discord.gg/swMV6kgV">
+  <img src="https://img.shields.io/badge/Discussion-Discord-5562EA" alt="Discussion Discord">
+</a> 
 
 </div>
 
@@ -15,6 +17,8 @@
 - 🧫 Experiment Management with [Weights and Biases]().
 
 > **Plasticine** is built on the top of [CleanRL](https://github.com/vwxyzjn/cleanrl). Thanks for the excellent project!
+
+> Join the [Discord](https://discord.gg/swMV6kgV) channel for discussion!
 
 ## Quick Start
 - Create an environment and install the dependencies:
@@ -34,7 +38,7 @@ sh scripts/std_ppo_craftax.sh
 ## Implemented Algorithms
 ### Standard RL
 
-|        **Algorithm**        |                     **Benchmark**                    | **Backbone** |                                                                                                         **Code**                                                                                                         |  **Remark**  |
+|        **Algorithm**        |                     **Benchmark**                    | **Backbone** |                                                                                                         **Code**                                                                                                         |  **Frequency**  |
 |:---------------------------:|:----------------------------------------------------:|:------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------:|
 |           Vanilla           | Craftax (State)<br>Procgen (Pixel)<br>Mujoco (State) |   PPO, TD3   | [ppo_craftax_vanilla.py](./plasticine/standard/ppo_craftax_vanilla.py)<br>[ppo_procgen_vanilla.py](./plasticine/standard/ppo_procgen_vanilla.py)<br>[td3_mujoco_vanilla.py](./plasticine/standard/td3_mujoco_vanilla.py) |      N/A     |
 |        Shrink+Perturb       |          Craftax (State)<br>Procgen (Pixel)          |      PPO     |                                               [ppo_craftax_sp.py](./plasticine/standard/ppo_craftax_sp.py)<br>[ppo_procgen_sp.py](./plasticine/standard/ppo_procgen_sp.py)                                               | Intermittent |
