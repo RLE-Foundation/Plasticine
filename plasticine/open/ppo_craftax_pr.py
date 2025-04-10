@@ -95,15 +95,52 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    # Parseval Regularization specific arguments
+    parseval_lambda: float = 1e-3
+    """the strength of the Parseval Regularization"""
+    parseval_s: float = 1.0
+    """the scaling factor of the Parseval Regularization"""
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+class ParsevalLinear(nn.Linear):
+    """
+    Linear layer with Parseval regularization.
+    
+    Args:
+        Same as nn.Linear plus:
+        lambda_reg (float): Regularization strength
+        s (float): Target scale for singular values
+    """
+    def __init__(self, in_features, out_features, bias=True, lambda_reg=1e-3, s=1.0):
+        super().__init__(in_features, out_features, bias)
+        self.lambda_reg = lambda_reg
+        self.s = s
+        
+    def parseval_loss(self):
+        """
+        Computes the Parseval regularization loss for this layer's weight matrix.
+        """
+        # Skip if not training or regularization is disabled
+        if not self.training or self.lambda_reg <= 0:
+            return torch.tensor(0.0, device=self.weight.device)
+            
+        # Compute WW^T
+        wwt = torch.mm(self.weight, self.weight.t())
+        
+        # Target is s*I
+        target = self.s * torch.eye(wwt.shape[0], device=self.weight.device)
+        
+        # Frobenius norm squared of difference
+        loss = torch.square(torch.norm(wwt - target, p='fro'))
+        
+        return self.lambda_reg * loss
 
 class Agent(nn.Module):
-    def __init__(self, obs_shape, action_dim):
+    def __init__(self, obs_shape, action_dim, parseval_lambda, parseval_s):
         super().__init__()
         self.action_dim = action_dim
         self.obs_shape = obs_shape
@@ -113,14 +150,20 @@ class Agent(nn.Module):
         self.value_encoder = self.gen_encoder()
         self.value = self.gen_value()
 
+        self.parseval_lambda = parseval_lambda
+        self.parseval_s = parseval_s
+
     def gen_encoder(self):
         # generate the encoder
         return nn.Sequential(
-            layer_init(nn.Linear(self.obs_shape[0], 512)),
+            self.layer_init(ParsevalLinear(self.obs_shape[0], 512, 
+                         lambda_reg=self.parseval_lambda, s=self.parseval_s)),
             nn.Tanh(),
-            layer_init(nn.Linear(512, 512)),
+            self.layer_init(ParsevalLinear(512, 512, 
+                         lambda_reg=self.parseval_lambda, s=self.parseval_s)),
             nn.Tanh(),
-            layer_init(nn.Linear(512, 512)),
+            self.layer_init(ParsevalLinear(512, 512, 
+                         lambda_reg=self.parseval_lambda, s=self.parseval_s)),
             nn.Tanh(),
         )
 
@@ -165,6 +208,20 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
 
+    def parseval_regularization_loss(self):
+        """
+        Compute total Parseval regularization loss across all applicable layers.
+        """
+        total_loss = torch.tensor(0.0, device=next(self.parameters()).device)
+        
+        # Check all modules in policy and value encoders
+        for module in [self.policy_encoder, self.value_encoder]:
+            for layer in module:
+                if isinstance(layer, ParsevalLinear):
+                    total_loss = total_loss + layer.parseval_loss()
+                    
+        return total_loss
+
 if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
@@ -183,7 +240,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_craftax_vanilla_runs'
+    log_dir = 'std_ppo_craftax_pr_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -208,7 +265,9 @@ if __name__ == "__main__":
     action_dim = env.action_space(env_params).n
 
     # agent setup
-    agent = Agent(obs_shape=obs_shape, action_dim=action_dim).to(device)
+    agent = Agent(obs_shape=obs_shape, action_dim=action_dim, 
+                  parseval_lambda=args.parseval_lambda, parseval_s=args.parseval_s
+                  ).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup

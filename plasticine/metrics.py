@@ -1,30 +1,93 @@
 # Based on: https://github.com/awjuliani/deep-rl-plasticity
 
 import torch
+import numpy as np
 
 from typing import Dict
 
+from utils import CReLU4Linear, CReLU4Conv2d, DFFLayer4Linear, DFFLayer4Conv2d
 
-
-def compute_dormant_units(features: torch.Tensor, activation: str) -> torch.Tensor:
+def compute_dormant_units(model: torch.nn.Module, data: torch.Tensor, activation: str, tau: float) -> torch.Tensor:
     """
-    Compute the ratio of dormant units in the features.
+    Compute the ratio of dormant units (RDU) in the model.
+
+    Args:
+        model (torch.nn.Module): The model to evaluate.
+        data (torch.Tensor): The data for evaluating the model.
+        activation (str): The activation function used in the model.
+        tau (float): The threshold for dormant units.
+
+    Returns:
+        torch.Tensor: The ratio of dormant units.
+    """
+
+    with torch.no_grad():
+        # Create a dictionary to store the s scores for each layer
+        s_scores_dict = {}
+
+        # Register a forward hook to capture the activations of each layer
+        activations = {}
+        hooks = []
+
+        def hook(module, input, output):
+            activations[module] = output.detach()
+
+        act_set = (torch.nn.ReLU, torch.nn.Tanh, torch.nn.Sigmoid, CReLU4Linear, CReLU4Conv2d, DFFLayer4Linear, DFFLayer4Conv2d)
+
+        for name, module in model.named_modules():
+            if isinstance(module, act_set):
+                handle = module.register_forward_hook(hook)
+                hooks.append(handle)
+
+        # Forward pass through the model
+        model(data)
+
+        # Calculate the s scores for each layer
+        for name, module in model.named_modules():
+            if isinstance(module, act_set):
+                layer_activations = activations[module]
+                if activation in ['tanh', 'dff']:
+                    layer_activations = torch.abs(layer_activations)
+                s_scores = layer_activations / (torch.mean(layer_activations, axis=1, keepdim=True) + 1e-6)
+                s_scores = torch.mean(s_scores, axis=0)
+                if len(s_scores.shape) > 1:
+                    s_scores = torch.mean(s_scores, axis=tuple(range(1, len(s_scores.shape))))
+                s_scores_dict[name] = s_scores
+
+        # Remove the hooks to prevent memory leaks
+        for handle in hooks:
+            handle.remove()
+
+        rdu = []
+        # Calculate the ratio of dormant units
+        for name, s_scores in s_scores_dict.items():
+            reset_mask = s_scores <= tau
+            rdu.append(torch.mean(reset_mask.float()))
+        
+    return torch.mean(torch.Tensor(rdu))
+
+
+def compute_active_units(features: torch.Tensor, activation: str) -> torch.Tensor:
+    """
+    Compute the fraction of active units (FAU) in the features.
 
     Args:
         features (torch.Tensor): The feature tensor with the data shape [batch_size, num_features].
         activation (str): The activation function used in the model.
 
     Returns:
-        torch.Tensor: The ratio of dormant units.
+        torch.Tensor: The fraction of active units units.
     """
     assert features.ndim == 2, "features should be a 2D tensor"
     assert features.size(0) > features.size(1), "batch_size should be greater than num_features"
     if activation in ["ln-relu", "gn-relu", "relu", "crelu"]:
-        return torch.mean((features == 0).float())
+        return 1. - torch.mean((features == 0).float())
     elif activation == "tanh":
-        return torch.mean((torch.abs(features) > 0.99).float())
+        return 1. - torch.mean((torch.abs(features) > 0.99).float())
     elif activation == "sigmoid":
-        return torch.mean(((features < 0.01) | (features > 0.99)).float())
+        return 1. - torch.mean(((features < 0.01) | (features > 0.99)).float())
+    elif activation == "dff":
+        return 1. - torch.mean((torch.abs(features) > (2 ** 0.5 - 0.01)).float())
     else:
         raise NotImplementedError
     

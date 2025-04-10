@@ -21,7 +21,8 @@ from craftax.craftax_env import make_craftax_env_from_name
 from plasticine.craftax_wrappers import (LogWrapper, 
                                          OptimisticResetVecEnvWrapper
                                          )
-from plasticine.metrics import (compute_dormant_units, 
+from plasticine.metrics import (compute_active_units,
+                                compute_dormant_units, 
                                 compute_stable_rank, 
                                 compute_effective_rank, 
                                 compute_feature_norm, 
@@ -30,6 +31,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.utils import DFFLayer4Linear
 
 @dataclass
 class Args:
@@ -86,10 +88,6 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
-    # shrink and perturb arguments
-    sp_coefficient: float = 0.999999
-    """p_new = sp_coefficient * p_current + (1 - sp_coefficient) * p_init"""
-
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -120,11 +118,11 @@ class Agent(nn.Module):
         # generate the encoder
         return nn.Sequential(
             layer_init(nn.Linear(self.obs_shape[0], 512)),
-            nn.Tanh(),
+            DFFLayer4Linear(),
             layer_init(nn.Linear(512, 512)),
-            nn.Tanh(),
+            DFFLayer4Linear(),
             layer_init(nn.Linear(512, 512)),
-            nn.Tanh(),
+            DFFLayer4Linear(),
         )
 
     def gen_policy(self, action_dim):
@@ -147,41 +145,26 @@ class Agent(nn.Module):
 
         if check:
             with torch.no_grad():
-                dead_units = compute_dormant_units(policy_x, 'tanh') + compute_dormant_units(value_x, 'tanh')
-                stable_rank = compute_stable_rank(policy_x) + compute_stable_rank(value_x)
-                effective_rank = compute_effective_rank(policy_x) + compute_effective_rank(value_x)
-                feature_norm = compute_feature_norm(policy_x) + compute_feature_norm(value_x)
-                feature_var = compute_feature_variance(policy_x) + compute_feature_variance(value_x)
+                policy_active_units, value_active_units = compute_active_units(policy_x, 'dff'), compute_active_units(value_x, 'dff')
+                policy_stable_rank, value_stable_rank = compute_stable_rank(policy_x), compute_stable_rank(value_x)
+                policy_effective_rank, value_effective_rank = compute_effective_rank(policy_x), compute_effective_rank(value_x)
+                policy_feature_norm, value_feature_norm = compute_feature_norm(policy_x), compute_feature_norm(value_x)
+                policy_feature_var, value_feature_var = compute_feature_variance(policy_x), compute_feature_variance(value_x)
                 plasticity_metrics = {
-                    "dormant_units": dead_units.item(),
-                    "stable_rank": stable_rank.item(),
-                    "effective_rank": effective_rank.item(),
-                    "feature_norm": feature_norm.item(),
-                    "feature_var": feature_var.item(),
+                    "policy_active_units": policy_active_units.item(),
+                    "policy_stable_rank": policy_stable_rank.item(),
+                    "policy_effective_rank": policy_effective_rank.item(),
+                    "policy_feature_norm": policy_feature_norm.item(),
+                    "policy_feature_var": policy_feature_var.item(),
+                    "value_active_units": value_active_units.item(),
+                    "value_stable_rank": value_stable_rank.item(),
+                    "value_effective_rank": value_effective_rank.item(),
+                    "value_feature_norm": value_feature_norm.item(),
+                    "value_feature_var": value_feature_var.item(),
                 }
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x), plasticity_metrics
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
-    
-    def shrink_perturb(self, shrink_p):
-        perturb_p = 1.0 - shrink_p
-        # shrink the encoder
-        new_policy_enc = self.gen_encoder()
-        self.sp_module(self.policy_encoder, new_policy_enc, shrink_p, perturb_p)
-        new_value_enc = self.gen_encoder()
-        self.sp_module(self.value_encoder, new_value_enc, shrink_p, perturb_p)
-        # shrink the value and policy
-        new_value = self.gen_value()
-        self.sp_module(self.value, new_value, shrink_p, perturb_p)
-        new_policy = self.gen_policy(self.action_dim)
-        self.sp_module(self.policy, new_policy, shrink_p, perturb_p)
-
-    def sp_module(self, current_module, init_module, shrink_factor, epsilon):
-        use_device = next(current_module.parameters()).device
-        init_params = list(init_module.to(use_device).parameters())
-        for idx, current_param in enumerate(current_module.parameters()):
-            current_param.data *= shrink_factor
-            current_param.data += epsilon * init_params[idx].data
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -201,7 +184,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_craftax_ssp_runs'
+    log_dir = 'std_ppo_craftax_dff_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -313,13 +296,20 @@ if __name__ == "__main__":
         clipfracs = []
 
         # plasticity metrics
-        total_dormant_units = []
-        total_stable_rank = []
-        total_effective_rank = []
+        total_policy_active_units = []
+        total_policy_stable_rank = []
+        total_policy_effective_rank = []
+        total_policy_feature_norm = []
+        total_policy_feature_var = []
+        total_value_active_units = []
+        total_value_stable_rank = []
+        total_value_effective_rank = []
+        total_value_feature_norm = []
+        total_value_feature_var = []
+
         total_grad_norm = []
         total_policy_ent = []
-        total_feature_norm = []
-        total_feature_var = []
+
         # copy the agent
         agent_copy = save_model_state(agent)
 
@@ -372,15 +362,17 @@ if __name__ == "__main__":
                 batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                 optimizer.step()
 
-                # shrink and perturb the agent (batch-level)
-                agent.shrink_perturb(shrink_p=args.sp_coefficient)
-
                 # log plasticity metrics
-                total_dormant_units.append(plasticity_metrics["dormant_units"])
-                total_stable_rank.append(plasticity_metrics["stable_rank"])
-                total_effective_rank.append(plasticity_metrics["effective_rank"])
-                total_feature_norm.append(plasticity_metrics["feature_norm"])
-                total_feature_var.append(plasticity_metrics["feature_var"])
+                total_policy_active_units.append(plasticity_metrics["policy_active_units"])
+                total_policy_stable_rank.append(plasticity_metrics["policy_stable_rank"])
+                total_policy_effective_rank.append(plasticity_metrics["policy_effective_rank"])
+                total_policy_feature_norm.append(plasticity_metrics["policy_feature_norm"])
+                total_policy_feature_var.append(plasticity_metrics["policy_feature_var"])
+                total_value_active_units.append(plasticity_metrics["value_active_units"])
+                total_value_stable_rank.append(plasticity_metrics["value_stable_rank"])
+                total_value_effective_rank.append(plasticity_metrics["value_effective_rank"])
+                total_value_feature_norm.append(plasticity_metrics["value_feature_norm"])
+                total_value_feature_var.append(plasticity_metrics["value_feature_var"])
                 total_grad_norm.append(batch_grad_norm.item())
                 total_policy_ent.append(entropy_loss.item())
 
@@ -395,6 +387,12 @@ if __name__ == "__main__":
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
         # compute weight magnitude
         weight_magnitude = compute_weight_magnitude(agent)
+        # compute dormant units
+        if iteration % 10 == 0:
+            policy_dormant_units = compute_dormant_units(agent.policy_encoder, b_obs[mb_inds], 'dff', tau=0.05)
+            value_dormant_units = compute_dormant_units(agent.value_encoder, b_obs[mb_inds], 'dff', tau=0.05)
+            writer.add_scalar("plasticity/policy_dormant_units", policy_dormant_units, global_step)
+            writer.add_scalar("plasticity/value_dormant_units", value_dormant_units, global_step)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
@@ -405,16 +403,22 @@ if __name__ == "__main__":
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
-        # add plasticity metrics
-        writer.add_scalar("plasticity/dormant_units", np.mean(total_dormant_units), global_step)
-        writer.add_scalar("plasticity/stable_rank", np.mean(total_stable_rank), global_step)
-        writer.add_scalar("plasticity/effective_rank", np.mean(total_effective_rank), global_step)
+        # individual plasticity metrics
+        writer.add_scalar("plasticity/policy_active_units", np.mean(total_policy_active_units), global_step)
+        writer.add_scalar("plasticity/policy_stable_rank", np.mean(total_policy_stable_rank), global_step)
+        writer.add_scalar("plasticity/policy_effective_rank", np.mean(total_policy_effective_rank), global_step)
+        writer.add_scalar("plasticity/policy_feature_norm", np.mean(total_policy_feature_norm), global_step)
+        writer.add_scalar("plasticity/policy_feature_var", np.mean(total_policy_feature_var), global_step)
+        writer.add_scalar("plasticity/value_active_units", np.mean(total_value_active_units), global_step)
+        writer.add_scalar("plasticity/value_stable_rank", np.mean(total_value_stable_rank), global_step)
+        writer.add_scalar("plasticity/value_effective_rank", np.mean(total_value_effective_rank), global_step)
+        writer.add_scalar("plasticity/value_feature_norm", np.mean(total_value_feature_norm), global_step)
+        writer.add_scalar("plasticity/value_feature_var", np.mean(total_value_feature_var), global_step)
+        # overall plasticity metrics
         writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)
         writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
         writer.add_scalar("plasticity/grad_norm", np.mean(total_grad_norm), global_step)
         writer.add_scalar("plasticity/policy_entropy", np.mean(total_policy_ent), global_step)
-        writer.add_scalar("plasticity/feature_norm", np.mean(total_feature_norm), global_step)
-        writer.add_scalar("plasticity/feature_variance", np.mean(total_feature_var), global_step)
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 

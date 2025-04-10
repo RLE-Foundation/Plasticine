@@ -31,6 +31,7 @@ from plasticine.metrics import (compute_active_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.trac import start_trac
 
 @dataclass
 class Args:
@@ -183,7 +184,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_craftax_vanilla_runs'
+    log_dir = 'std_ppo_craftax_trac_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -210,6 +211,8 @@ if __name__ == "__main__":
     # agent setup
     agent = Agent(obs_shape=obs_shape, action_dim=action_dim).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+    # TRAC setup
+    optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', optimizer)(agent.parameters(), lr=args.lr)
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + obs_shape).to(device)

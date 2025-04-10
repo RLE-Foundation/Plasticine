@@ -31,6 +31,7 @@ from plasticine.metrics import (compute_active_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.utils import CReLU4Linear
 
 @dataclass
 class Args:
@@ -117,11 +118,11 @@ class Agent(nn.Module):
         # generate the encoder
         return nn.Sequential(
             layer_init(nn.Linear(self.obs_shape[0], 512)),
-            nn.Tanh(),
+            CReLU4Linear(),
             layer_init(nn.Linear(512, 512)),
-            nn.Tanh(),
+            CReLU4Linear(),
             layer_init(nn.Linear(512, 512)),
-            nn.Tanh(),
+            CReLU4Linear(),
         )
 
     def gen_policy(self, action_dim):
@@ -144,7 +145,7 @@ class Agent(nn.Module):
 
         if check:
             with torch.no_grad():
-                policy_active_units, value_active_units = compute_active_units(policy_x, 'tanh'), compute_active_units(value_x, 'tanh')
+                policy_active_units, value_active_units = compute_active_units(policy_x, 'crelu'), compute_active_units(value_x, 'crelu')
                 policy_stable_rank, value_stable_rank = compute_stable_rank(policy_x), compute_stable_rank(value_x)
                 policy_effective_rank, value_effective_rank = compute_effective_rank(policy_x), compute_effective_rank(value_x)
                 policy_feature_norm, value_feature_norm = compute_feature_norm(policy_x), compute_feature_norm(value_x)
@@ -183,7 +184,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_craftax_vanilla_runs'
+    log_dir = 'std_ppo_craftax_ca_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -388,8 +389,8 @@ if __name__ == "__main__":
         weight_magnitude = compute_weight_magnitude(agent)
         # compute dormant units
         if iteration % 10 == 0:
-            policy_dormant_units = compute_dormant_units(agent.policy_encoder, b_obs[mb_inds], 'tanh', tau=0.05)
-            value_dormant_units = compute_dormant_units(agent.value_encoder, b_obs[mb_inds], 'tanh', tau=0.05)
+            policy_dormant_units = compute_dormant_units(agent.policy_encoder, b_obs[mb_inds], 'crelu', tau=0.05)
+            value_dormant_units = compute_dormant_units(agent.value_encoder, b_obs[mb_inds], 'crelu', tau=0.05)
             writer.add_scalar("plasticity/policy_dormant_units", policy_dormant_units, global_step)
             writer.add_scalar("plasticity/value_dormant_units", value_dormant_units, global_step)
 

@@ -1,5 +1,6 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_ataripy
 import os
+from turtle import reset
 os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'  
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 import random
@@ -87,6 +88,12 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
+    # resetting layer arguments
+    reset_type: str = 'final'
+    """the type of resetting layer, can be 'final' or 'all'"""
+    reset_frequency: int = 1000
+    """the frequency of resetting layer"""
+
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -165,6 +172,34 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
 
+    def shrink_perturb(self, reset_type):
+        shrink_p, perturb_p = 0.0, 1.0
+        if reset_type == 'final':
+            shrink_encoder, shrink_value, shrink_policy = False, True, True
+        elif reset_type == 'all':
+            shrink_encoder, shrink_value, shrink_policy = True, True, True
+        else:
+            raise NotImplementedError(f"reset_type {reset_type} not implemented")
+
+        if shrink_encoder:
+            new_policy_enc = self.gen_encoder()
+            self.sp_module(self.policy_encoder, new_policy_enc, shrink_p, perturb_p)
+            new_value_enc = self.gen_encoder()
+            self.sp_module(self.value_encoder, new_value_enc, shrink_p, perturb_p)
+        if shrink_value:
+            new_value = self.gen_value()
+            self.sp_module(self.value, new_value, shrink_p, perturb_p)
+        if shrink_policy:
+            new_policy = self.gen_policy(self.action_dim)
+            self.sp_module(self.policy, new_policy, shrink_p, perturb_p)
+
+    def sp_module(self, current_module, init_module, shrink_factor, epsilon):
+        use_device = next(current_module.parameters()).device
+        init_params = list(init_module.to(use_device).parameters())
+        for idx, current_param in enumerate(current_module.parameters()):
+            current_param.data *= shrink_factor
+            current_param.data += epsilon * init_params[idx].data
+
 if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
@@ -183,7 +218,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_craftax_vanilla_runs'
+    log_dir = 'std_ppo_craftax_rl_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -381,6 +416,10 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        # shrink and perturb the agent (episode-level)
+        if iteration % args.reset_frequency == 0:
+            agent.shrink_perturb(reset_type=args.reset_type)
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

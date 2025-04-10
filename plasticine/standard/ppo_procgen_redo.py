@@ -14,7 +14,8 @@ from procgen import ProcgenEnv
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
-from plasticine.metrics import (compute_dormant_units, 
+from plasticine.metrics import (compute_active_units,
+                                compute_dormant_units, 
                                 compute_stable_rank, 
                                 compute_effective_rank, 
                                 compute_feature_norm, 
@@ -181,7 +182,7 @@ class Agent(nn.Module):
 
         if check:
             with torch.no_grad():
-                dead_units = compute_dormant_units(hidden, 'relu')
+                dead_units = compute_active_units(hidden, 'relu')
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
                 feature_norm = compute_feature_norm(hidden)
@@ -487,6 +488,8 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        compute_dormant_units(agent, b_obs[mb_inds], 'tanh', args.redo_tau)
 
         # ReDo operation
         if iteration % args.redo_frequency == 0 and iteration > 1:
