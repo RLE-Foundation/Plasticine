@@ -492,7 +492,7 @@ if __name__ == "__main__":
         compute_dormant_units(agent, b_obs[mb_inds], 'tanh', args.redo_tau)
 
         # ReDo operation
-        if iteration % args.redo_frequency == 0 and iteration > 1:
+        if iteration % args.redo_frequency == 0 and iteration > 0:
             redo_reset(agent, b_obs[mb_inds], args.redo_tau)
 
         # compute the l2 norm difference

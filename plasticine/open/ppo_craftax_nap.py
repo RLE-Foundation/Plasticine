@@ -117,7 +117,6 @@ class Agent(nn.Module):
         self.value_encoder = self.gen_encoder()
         self.value = self.gen_value()
 
-        self.steps = 0 # Track steps for projection
         # record initial norms of all weight parameters for NaP
         self.initial_norms = self._record_initial_norms()
 

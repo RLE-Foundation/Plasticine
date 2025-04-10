@@ -4,6 +4,8 @@
 ## Plasticine: Clean Plasticity Optimization in Deep Reinforcement Learning
 <img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> <a href="https://discord.gg/swMV6kgV">
   <img src="https://img.shields.io/badge/Discussion-Discord-5562EA" alt="Discussion Discord">
+
+  ⚠️⚠️⚠️This project is undergoing fast development and iteration!!!⚠️⚠️⚠️
 </a> 
 
 </div>
