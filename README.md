@@ -38,10 +38,13 @@ sh scripts/std_ppo_craftax.sh
 
 
 ## Implemented Algorithms and Metrics
-### Reset-based Interventions
-| **Algorithm**               | **Standard**                                                                                                                                                               | **Continual**                                                                                                        | **Open-ended**                                          |
-|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+### Vanilla
+| **Algorithm** | **Standard** | **Continual** | **Open-ended**|
+|:--|:--|:--|:--|
 | Vanilla                     | [PPO+Procgen](./plasticine/standard/ppo_procgen_vanilla.py),[PQN+Atari](./plasticine/standard/pqn_atari_vanilla.py),[TD3+DMC](./plasticine/standard/td3_dmc_vanilla.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_vanilla.py),[TD3+DMC](./plasticine/continual/td3_dmc_vanilla.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_vanilla.py) |
+### Reset-based Interventions
+| **Algorithm** | **Standard** | **Continual** | **Open-ended**|
+|:--|:--|:--|:--|
 | Shrink and Perturb          | [PPO+Procgen](./plasticine/standard/ppo_procgen_snp.py),[PQN+Atari](./plasticine/standard/pqn_atari_snp.py),[TD3+DMC](./plasticine/standard/td3_dmc_snp.py)          | [PPO+Procgen](./plasticine/continual/ppo_procgen_snp.py),[TD3+DMC](./plasticine/continual/td3_dmc_snp.py)         | [PPO+Craftax](./plasticine/open/ppo_craftax_snp.py)     |
 | Plasticity Injection        | [PPO+Procgen](./plasticine/standard/ppo_procgen_pi.py),[PQN+Atari](./plasticine/standard/pqn_atari_pi.py),[TD3+DMC](./plasticine/standard/td3_dmc_pi.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_pi.py),[TD3+DMC](./plasticine/continual/td3_dmc_pi.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_pi.py)      |
 | ReDo                        | [PPO+Procgen](./plasticine/standard/ppo_procgen_redo.py),[PQN+Atari](./plasticine/standard/pqn_atari_redo.py),[TD3+DMC](./plasticine/standard/td3_dmc_redo.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_redo.py),[TD3+DMC](./plasticine/continual/td3_dmc_redo.py)       | [PPO+Craftax](./plasticine/open/ppo_craftax_redo.py)    |
@@ -50,16 +53,16 @@ sh scripts/std_ppo_craftax.sh
 
 ### Normlization
 
-| **Algorithm**               | **Standard**                                                                                                                                                               | **Continual**                                                                                                        | **Open-ended**                                          |
-|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| **Algorithm** | **Standard** | **Continual** | **Open-ended**|
+|:--|:--|:--|:--|
 | Layer Normalization         | [PPO+Procgen](./plasticine/standard/ppo_procgen_ln.py),[PQN+Atari](./plasticine/standard/pqn_atari_ln.py),[TD3+DMC](./plasticine/standard/td3_dmc_ln.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_ln.py),[TD3+DMC](./plasticine/continual/td3_dmc_ln.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_ln.py)      |
 | Normalize-and-Project       | [PPO+Procgen](./plasticine/standard/ppo_procgen_nap.py),[PQN+Atari](./plasticine/standard/pqn_atari_nap.py),[TD3+DMC](./plasticine/standard/td3_dmc_nap.py)          | [PPO+Procgen](./plasticine/continual/ppo_procgen_nap.py),[TD3+DMC](./plasticine/continual/td3_dmc_nap.py)         | [PPO+Craftax](./plasticine/open/ppo_craftax_nap.py)     |
 
 
 ### Regularization
 
-| **Algorithm**               | **Standard**                                                                                                                                                         | **Continual**                                                                                                  | **Open-ended**                                       |
-|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| **Algorithm** | **Standard** | **Continual** | **Open-ended**|
+|:--|:--|:--|:--|
 | L2 Normalization            | [PPO+Procgen](./plasticine/standard/ppo_procgen_l2n.py),[PQN+Atari](./plasticine/standard/pqn_atari_l2n.py),[TD3+DMC](./plasticine/standard/td3_dmc_l2n.py)    | [PPO+Procgen](./plasticine/continual/ppo_procgen_l2n.py),[TD3+DMC](./plasticine/continual/td3_dmc_l2n.py)   | [PPO+Craftax](./plasticine/open/ppo_craftax_l2n.py)  |
 | Regenerative Regularization | [PPO+Procgen](./plasticine/standard/ppo_procgen_rr.py),[PQN+Atari](./plasticine/standard/pqn_atari_rr.py),[TD3+DMC](./plasticine/standard/td3_dmc_rr.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_rr.py),[TD3+DMC](./plasticine/continual/td3_dmc_rr.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_rr.py)   |
 | Parseval Regularization     | [PPO+Procgen](./plasticine/standard/ppo_procgen_pr.py),[PQN+Atari](./plasticine/standard/pqn_atari_pr.py),[TD3+DMC](./plasticine/standard/td3_dmc_pr.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_pr.py),[TD3+DMC](./plasticine/continual/td3_dmc_pr.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_pr.py)   |
@@ -67,8 +70,8 @@ sh scripts/std_ppo_craftax.sh
 
 ### Activation
 
-| **Algorithm**         | **Standard**                                                                                                                                                         | **Continual**                                                                                                  | **Open-ended**                                       |
-|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| **Algorithm** | **Standard** | **Continual** | **Open-ended**|
+|:--|:--|:--|:--|
 | CReLU Activation      | [PPO+Procgen](./plasticine/standard/ppo_procgen_ca.py),[PQN+Atari](./plasticine/standard/pqn_atari_ca.py),[TD3+DMC](./plasticine/standard/td3_dmc_ca.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_ca.py),[TD3+DMC](./plasticine/continual/td3_dmc_ca.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_ca.py)   |
 | Deep Fourier Features | [PPO+Procgen](./plasticine/standard/ppo_procgen_dff.py),[PQN+Atari](./plasticine/standard/pqn_atari_dff.py),[TD3+DMC](./plasticine/standard/td3_dmc_dff.py)    | [PPO+Procgen](./plasticine/continual/ppo_procgen_dff.py),[TD3+DMC](./plasticine/continual/td3_dmc_dff.py)   | [PPO+Craftax](./plasticine/open/ppo_craftax_dff.py)  |
 
@@ -76,8 +79,8 @@ sh scripts/std_ppo_craftax.sh
 ### Optimizer
 
 
-| **Algorithm** | **Standard**                                                                                                                                                         | **Continual**                                                                                                  | **Open-ended**                                       |
-|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| **Algorithm** | **Standard** | **Continual** | **Open-ended**|
+|:--|:--|:--|:--|
 | TRAC          | [PPO+Procgen](./plasticine/standard/ppo_procgen_trac.py),[PQN+Atari](./plasticine/standard/pqn_atari_trac.py),[TD3+DMC](./plasticine/standard/td3_dmc_trac.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_trac.py),[TD3+DMC](./plasticine/continual/td3_dmc_trac.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_trac.py) |
 
 ### Evalution Metrics
