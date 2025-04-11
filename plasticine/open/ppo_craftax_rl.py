@@ -417,7 +417,7 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        # shrink and perturb the agent (episode-level)
+        # reset the layers
         if iteration % args.reset_frequency == 0:
             agent.shrink_perturb(reset_type=args.reset_type)
 
