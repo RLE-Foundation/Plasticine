@@ -79,11 +79,12 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
+    """------------------------Plasticine------------------------"""
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
@@ -98,7 +99,7 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
     return thunk
 
-
+"""------------------------Plasticine------------------------"""
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
@@ -121,7 +122,7 @@ class Injector(nn.Module):
 
     def forward(self, x):
         return self.original(x) + self.new_a(x) - self.new_b(x).detach()
-
+"""------------------------Plasticine------------------------"""
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
@@ -155,10 +156,11 @@ class QNetwork(nn.Module):
         x = self.value_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def inject(self):
         self.value = Injector(self.value, 256, 1)
         self.value.to(next(self.parameters()).device)
-
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -205,9 +207,11 @@ class Actor(nn.Module):
         x = self.policy_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def inject(self):
         self.policy = Injector(self.policy, 256, self.action_dim)
         self.policy.to(next(self.parameters()).device)
+    """------------------------Plasticine------------------------"""
 
 
 if __name__ == "__main__":
@@ -365,12 +369,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
             
+            """------------------------Plasticine------------------------"""
             # plasticity injection at the middle of training
             if global_step % (args.total_timesteps // 2) == 0:
                 # inject plasticity
                 actor.inject()
                 qf1.inject()
                 qf2.inject()
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

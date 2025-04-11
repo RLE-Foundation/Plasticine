@@ -82,15 +82,16 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
-
+    
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-
     # resetting layer arguments
     reset_type: str = 'final'
     """the type of resetting layer, can be 'final' or 'all'"""
     reset_frequency: int = 1000
     """the frequency of resetting layer"""
+    """------------------------Plasticine------------------------"""
     
 
 class RecordEpisodeStatistics(gym.Wrapper):
@@ -337,9 +338,11 @@ if __name__ == "__main__":
 
                 total_grad_norm.append(batch_grad_norm.item())
 
+        """------------------------Plasticine------------------------"""
         # shrink and perturb the agent (episode-level)
         if iteration % args.reset_frequency == 0:
             q_network.shrink_perturb(reset_type=args.reset_type)
+        """------------------------Plasticine------------------------"""
 
         # compute plasticity metrics
         if iteration % args.plasticity_eval_interval == 0:

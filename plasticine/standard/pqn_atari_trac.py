@@ -84,9 +84,10 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-    
+    """------------------------Plasticine------------------------"""
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):
@@ -215,8 +216,10 @@ if __name__ == "__main__":
     # save the initial state of the model
     q_network_copy = save_model_state(q_network)
     optimizer = optim.RAdam(q_network.parameters(), lr=args.learning_rate)
+    """------------------------Plasticine------------------------"""
     # TRAC setup
     optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', optimizer)(q_network.parameters(), lr=args.learning_rate)
+    """------------------------Plasticine------------------------"""
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)

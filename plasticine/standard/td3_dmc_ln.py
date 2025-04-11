@@ -78,11 +78,12 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
+    """------------------------Plasticine------------------------"""
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
@@ -108,6 +109,7 @@ class QNetwork(nn.Module):
         self.value = self.gen_value()
     
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
             nn.LayerNorm(256), # added layer norm
@@ -117,6 +119,7 @@ class QNetwork(nn.Module):
             nn.ReLU(),
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_value(self):
         return nn.Linear(256, 1)
@@ -158,6 +161,7 @@ class Actor(nn.Module):
         )
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
             nn.LayerNorm(256), # added layer norm
@@ -167,6 +171,7 @@ class Actor(nn.Module):
             nn.ReLU(),
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_policy(self):
         return nn.Linear(256, self.action_dim)

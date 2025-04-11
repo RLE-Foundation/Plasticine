@@ -79,11 +79,12 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
+    """------------------------Plasticine------------------------"""
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
@@ -233,6 +234,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
+    """------------------------Plasticine------------------------"""
     # TRAC setup
     optimizer = start_trac(f'{log_dir}/{run_name}/trac_value.text', q_optimizer)(
         list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
@@ -240,7 +242,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     # TRAC setup
     optimizer = start_trac(f'{log_dir}/{run_name}/trac_policy.text', actor_optimizer)(
         actor.parameters(), lr=args.learning_rate)
-
+    """------------------------Plasticine------------------------"""
 
     # save the initial state of the model
     actor_copy = save_model_state(actor)

@@ -83,12 +83,13 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-    
-    # NaP specific arguments
+    # Arguments for the Normalize-and-Project (NaP)
     projection_interval: int = 10
     """the interval for NaP weight projection"""
+    """------------------------Plasticine------------------------"""
     
 
 class RecordEpisodeStatistics(gym.Wrapper):
@@ -355,10 +356,12 @@ if __name__ == "__main__":
 
                 total_grad_norm.append(batch_grad_norm.item())
 
+        """------------------------Plasticine------------------------"""
         # perform NaP weight projection
         if iteration % args.projection_interval == 0:
             q_network.nap()
-
+        """------------------------Plasticine------------------------"""
+        
         # compute plasticity metrics
         if iteration % args.plasticity_eval_interval == 0:
             with torch.no_grad():

@@ -88,9 +88,11 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
-    # l2 norm arguments
+    """------------------------Plasticine------------------------"""
+    # Arguments for the L2 Normalization
     weight_decay: float = 1e-3
     """the weight decay coefficient"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -247,7 +249,9 @@ if __name__ == "__main__":
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
     agent = Agent(envs).to(device)
+    """------------------------Plasticine------------------------"""
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5, weight_decay=args.weight_decay)
+    """------------------------Plasticine------------------------"""
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)

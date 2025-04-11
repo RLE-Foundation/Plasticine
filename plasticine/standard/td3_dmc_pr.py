@@ -78,17 +78,17 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
-    # Parseval Regularization specific arguments
+    # Arguments for the Parseval Regularization (RR)
     parseval_lambda: float = 1e-3
     """the strength of the Parseval Regularization"""
     parseval_s: float = 1.0
     """the scaling factor of the Parseval Regularization"""
-
+    """------------------------Plasticine------------------------"""
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
@@ -103,6 +103,7 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
     return thunk
 
+"""------------------------Plasticine------------------------"""
 class ParsevalLinear(nn.Linear):
     """
     Linear layer with Parseval regularization.
@@ -135,7 +136,7 @@ class ParsevalLinear(nn.Linear):
         loss = torch.square(torch.norm(wwt - target, p='fro'))
         
         return self.lambda_reg * loss
-
+"""------------------------Plasticine------------------------"""
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
@@ -150,6 +151,7 @@ class QNetwork(nn.Module):
         self.parseval_s = parseval_s
     
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             ParsevalLinear(self.input_dim, 256, self.parseval_lambda, self.parseval_s),
             nn.ReLU(),
@@ -157,6 +159,7 @@ class QNetwork(nn.Module):
             nn.ReLU(),
         )
         return enc
+    """------------------------Plasticine------------------------"""
     
     def gen_value(self):
         return nn.Linear(256, 1)
@@ -172,6 +175,7 @@ class QNetwork(nn.Module):
         x = self.value_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def parseval_regularization_loss(self):
         """
         Compute total Parseval regularization loss across all applicable layers.
@@ -185,7 +189,7 @@ class QNetwork(nn.Module):
                     total_loss = total_loss + layer.parseval_loss()
                     
         return total_loss
-
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env, parseval_lambda, parseval_s):
@@ -215,6 +219,7 @@ class Actor(nn.Module):
         )
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             ParsevalLinear(self.input_dim, 256, self.parseval_lambda, self.parseval_s),
             nn.ReLU(),
@@ -222,6 +227,7 @@ class Actor(nn.Module):
             nn.ReLU(),
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_policy(self):
         return nn.Linear(256, self.action_dim)
@@ -235,6 +241,7 @@ class Actor(nn.Module):
         x = self.policy_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def parseval_regularization_loss(self):
         """
         Compute total Parseval regularization loss across all applicable layers.
@@ -248,7 +255,7 @@ class Actor(nn.Module):
                     total_loss = total_loss + layer.parseval_loss()
                     
         return total_loss
-
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
@@ -378,9 +385,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
             qf_loss = qf1_loss + qf2_loss
 
+            """------------------------Plasticine------------------------"""
             # add the Parseval Regularization loss
             qf_loss += (qf1.parseval_regularization_loss() + qf2.parseval_regularization_loss())
-
+            """------------------------Plasticine------------------------"""
 
             # optimize the model
             q_optimizer.zero_grad()
@@ -393,6 +401,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             if global_step % args.policy_frequency == 0:
                 actor_loss = -qf1(data.observations, actor(data.observations)).mean()
+
+                """------------------------Plasticine------------------------"""
+                # add the Parseval Regularization loss
+                actor_loss += actor.parseval_regularization_loss()
+                """------------------------Plasticine------------------------"""
+
                 actor_optimizer.zero_grad()
                 actor_loss.backward()
                 actor_optimizer.step()

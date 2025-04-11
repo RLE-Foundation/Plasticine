@@ -87,14 +87,6 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
-    # shrink and perturb arguments
-    sp_type: str = 'soft'
-    """the type of shrink and perturb, soft (batch-level) or hard (episode-level)"""
-    sp_frequency: int = 10
-    """the frequency of shrink and perturb (hard)"""
-    sp_coefficient: float = 0.999999
-    """p_new = sp_coefficient * p_current + (1 - sp_coefficient) * p_init, use a bigger value for snp-hard"""
-
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -102,6 +94,16 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
+
+    """------------------------Plasticine------------------------"""
+    # Arguments for the shrink and perturb (SnP) operation
+    sp_type: str = 'soft'
+    """the type of shrink and perturb, soft (batch-level) or hard (episode-level)"""
+    sp_frequency: int = 10
+    """the frequency of shrink and perturb (hard)"""
+    sp_coefficient: float = 0.999999
+    """p_new = sp_coefficient * p_current + (1 - sp_coefficient) * p_init, use a bigger value for snp-hard"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -173,6 +175,7 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
 
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, shrink_p):
         perturb_p = 1.0 - shrink_p
         # shrink the encoder
@@ -192,6 +195,7 @@ class Agent(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -389,9 +393,11 @@ if __name__ == "__main__":
                 batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                 optimizer.step()
 
+                """------------------------Plasticine------------------------"""
                 # shrink and perturb the agent (batch-level)
                 if args.sp_type == 'soft':
                     agent.shrink_perturb(shrink_p=args.sp_coefficient)
+                """------------------------Plasticine------------------------"""
 
                 # log plasticity metrics
                 total_policy_active_units.append(plasticity_metrics["policy_active_units"])
@@ -414,9 +420,11 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # shrink and perturb the agent (episode-level)
         if args.sp_type == 'hard' and iteration % args.sp_frequency == 0:
             agent.shrink_perturb(shrink_p=args.sp_coefficient)
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

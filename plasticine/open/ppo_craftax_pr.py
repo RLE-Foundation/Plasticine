@@ -95,17 +95,22 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
-    # Parseval Regularization specific arguments
+    """------------------------Plasticine------------------------"""
+    # Arguments for the Parseval Regularization (PR)
     parseval_lambda: float = 1e-3
     """the strength of the Parseval Regularization"""
     parseval_s: float = 1.0
     """the scaling factor of the Parseval Regularization"""
+    """------------------------Plasticine------------------------"""
+
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+
+"""------------------------Plasticine------------------------"""
 class ParsevalLinear(nn.Linear):
     """
     Linear layer with Parseval regularization.
@@ -138,6 +143,8 @@ class ParsevalLinear(nn.Linear):
         loss = torch.square(torch.norm(wwt - target, p='fro'))
         
         return self.lambda_reg * loss
+"""------------------------Plasticine------------------------"""
+
 
 class Agent(nn.Module):
     def __init__(self, obs_shape, action_dim, parseval_lambda, parseval_s):
@@ -154,6 +161,7 @@ class Agent(nn.Module):
         self.parseval_s = parseval_s
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         # generate the encoder
         return nn.Sequential(
             self.layer_init(ParsevalLinear(self.obs_shape[0], 512, 
@@ -164,8 +172,9 @@ class Agent(nn.Module):
             nn.Tanh(),
             self.layer_init(ParsevalLinear(512, 512, 
                          lambda_reg=self.parseval_lambda, s=self.parseval_s)),
-            nn.Tanh(),
-        )
+            nn.Tanh()
+            )
+        """------------------------Plasticine------------------------"""
 
     def gen_policy(self, action_dim):
         return layer_init(nn.Linear(512, action_dim), std=0.01)
@@ -208,6 +217,7 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
 
+    """------------------------Plasticine------------------------"""
     def parseval_regularization_loss(self):
         """
         Compute total Parseval regularization loss across all applicable layers.
@@ -221,6 +231,7 @@ class Agent(nn.Module):
                     total_loss = total_loss + layer.parseval_loss()
                     
         return total_loss
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -414,8 +425,10 @@ if __name__ == "__main__":
 
                 entropy_loss = entropy.mean()
                 loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
+                """------------------------Plasticine------------------------"""
                 # add the Parseval Regularization loss
                 loss += agent.parseval_regularization_loss()
+                """------------------------Plasticine------------------------"""
 
                 optimizer.zero_grad()
                 loss.backward()

@@ -87,12 +87,6 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
-    # ReDo specific arguments
-    redo_tau: float = 0.05
-    """the weight of the ReDo loss"""
-    redo_frequency: int = 10
-    """the frequency of the ReDo operation"""
-
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -100,6 +94,14 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
+
+    """------------------------Plasticine------------------------"""
+    # Arguments for the ReDo operation
+    redo_tau: float = 0.05
+    """the weight of the ReDo loss"""
+    redo_frequency: int = 10
+    """the frequency of the ReDo operation"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -170,6 +172,7 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
 
+    """------------------------Plasticine------------------------"""
     def forward(self, x):
         """
         Forward pass through the model, used for ReDo operation.
@@ -180,7 +183,9 @@ class Agent(nn.Module):
         value = self.value(x_value)
 
         return logits, value
+    """------------------------Plasticine------------------------"""
 
+"""------------------------Plasticine------------------------"""
 def redo_reset(model, batch_obs, tau):
     """
     Apply the ReDo operation to the model.
@@ -272,6 +277,7 @@ def reinitialize_weights(module, reset_mask, next_module):
     # Set outgoing weights to zero for reset neurons
     if type(module) == type(next_module):
         next_module.weight.data[:, reset_mask] = 0.0
+"""------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -490,9 +496,11 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # ReDo operation
         if iteration % args.redo_frequency == 0 and iteration > 1:
             redo_reset(agent, b_obs[mb_inds], args.redo_tau)
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

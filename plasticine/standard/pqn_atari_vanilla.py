@@ -83,9 +83,10 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-    
+    """------------------------Plasticine------------------------"""
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):

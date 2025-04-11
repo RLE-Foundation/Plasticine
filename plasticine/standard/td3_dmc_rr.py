@@ -79,13 +79,15 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-    # Regenerative Regularization arguments
+    # Arguments for the Regenerative Regularization (RR)
     rr_weight: float = 0.01
     """the weight of the regenerative regularization loss"""
+    """------------------------Plasticine------------------------"""
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -315,11 +317,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
             qf_loss = qf1_loss + qf2_loss
 
+            """------------------------Plasticine------------------------"""
             # Regenerative Regularization
             params = torch.cat([p.view(-1) for p in qf1.parameters()] + [p.view(-1) for p in qf2.parameters()])
             params_0 = torch.cat([p.view(-1) for p in init_qf1.parameters()] + [p.view(-1) for p in init_qf2.parameters()])
             qf_l2 = torch.norm(params - params_0.detach(), 2)
             qf_loss += args.rr_weight * qf_l2
+            """------------------------Plasticine------------------------"""
 
             # optimize the model
             q_optimizer.zero_grad()
@@ -333,11 +337,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if global_step % args.policy_frequency == 0:
                 actor_loss = -qf1(data.observations, actor(data.observations)).mean()
                 
+                """------------------------Plasticine------------------------"""
                 # Regenerative Regularization
                 params = torch.cat([p.view(-1) for p in actor.parameters()])
                 params_0 = torch.cat([p.view(-1) for p in init_actor.parameters()])
                 actor_l2 = torch.norm(params - params_0.detach(), 2)
                 actor_loss += args.rr_weight * actor_l2
+                """------------------------Plasticine------------------------"""
                 
                 actor_optimizer.zero_grad()
                 actor_loss.backward()

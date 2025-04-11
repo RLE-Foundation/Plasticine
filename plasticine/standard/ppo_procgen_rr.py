@@ -89,10 +89,11 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
-    # Regenerative Regularization arguments
+    """------------------------Plasticine------------------------"""
+    # Arguments for the Regenerative Regularization (RR)
     rr_weight: float = 0.01
     """the weight of the regenerative regularization loss"""
-
+    """------------------------Plasticine------------------------"""
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -378,11 +379,13 @@ if __name__ == "__main__":
                 entropy_loss = entropy.mean()
                 loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
 
+                """------------------------Plasticine------------------------"""
                 # Regenerative Regularization
                 params = torch.cat([p.view(-1) for p in agent.parameters()])
                 params_0 = torch.cat([p.view(-1) for p in init_agent.parameters()])
                 l2 = torch.norm(params - params_0.detach(), 2)
                 loss += args.rr_weight * l2
+                """------------------------Plasticine------------------------"""
 
                 optimizer.zero_grad()
                 loss.backward()

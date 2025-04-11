@@ -84,9 +84,10 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-    
+    """------------------------Plasticine------------------------"""
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):
@@ -136,23 +137,25 @@ class QNetwork(nn.Module):
         self.value = self.gen_value()
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         return nn.Sequential(
             layer_init(nn.Conv2d(4, 32, 8, stride=4)),
-            DFFLayer4Conv2d(),
-            layer_init(nn.Conv2d(32, 64, 4, stride=2)),
-            DFFLayer4Conv2d(),
-            layer_init(nn.Conv2d(64, 64, 3, stride=1)),
-            DFFLayer4Conv2d(),
+            DFFLayer4Conv2d(), # DFFLayer4Conv2d will double the output channels
+            layer_init(nn.Conv2d(32*2, 64, 4, stride=2)),
+            DFFLayer4Conv2d(), # DFFLayer4Conv2d will double the output channels
+            layer_init(nn.Conv2d(64*2, 64, 3, stride=1)),
+            DFFLayer4Conv2d(), # DFFLayer4Conv2d will double the output channels
             nn.Flatten(),
-            layer_init(nn.Linear(3136, 512)),
-            DFFLayer4Linear(),
+            layer_init(nn.Linear(3136*2, 512)),
+            DFFLayer4Linear(), # DFFLayer4Linear will double the output channels
         )
+        """------------------------Plasticine------------------------"""
     
     def get_features(self, x):
         return self.encoder(x / 255.0)
 
     def gen_value(self):
-        return layer_init(nn.Linear(512, self.action_dim))
+        return layer_init(nn.Linear(512*2, self.action_dim))
 
     def forward(self, x):
         return self.value(self.encoder(x / 255.0))

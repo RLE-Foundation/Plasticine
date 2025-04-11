@@ -95,9 +95,11 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
-    # NaP specific arguments
+    """------------------------Plasticine------------------------"""
+    # Arguments for the Normalize-and-Project (NaP)
     projection_interval: int = 10
     """the interval for NaP weight projection"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -429,9 +431,11 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # perform NaP weight projection
         if iteration % args.projection_interval == 0:
             agent.nap()
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

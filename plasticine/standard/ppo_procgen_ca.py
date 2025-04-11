@@ -101,14 +101,14 @@ class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
 
-        """=============================Plasticine============================="""
+        """------------------------Plasticine------------------------"""
         self.block = nn.Sequential(
-            CReLU4Conv2d(),
-            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1),
-            CReLU4Conv2d(),
-            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+            CReLU4Conv2d(), # CReLU4Conv2d will double the ouput channels
+            nn.Conv2d(in_channels=channels*2, out_channels=channels, kernel_size=3, padding=1),
+            CReLU4Conv2d(), # CReLU4Conv2d will double the ouput channels
+            nn.Conv2d(in_channels=channels*2, out_channels=channels, kernel_size=3, padding=1)
         )
-        """=============================Plasticine============================="""
+        """------------------------Plasticine------------------------"""
         
     def forward(self, x):
         return self.block(x) + x
@@ -154,21 +154,21 @@ class Agent(nn.Module):
             conv_seq = ConvSequence(shape, out_channels)
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
-        """=============================Plasticine============================="""
+        """------------------------Plasticine------------------------"""
         conv_seqs += [
             nn.Flatten(),
-            CReLU4Linear(),
-            nn.Linear(in_features=shape[0] * shape[1] * shape[2], out_features=256),
-            CReLU4Linear(),
+            CReLU4Linear(), # CReLU4Linear will double the ouput size
+            nn.Linear(in_features=shape[0] * shape[1] * shape[2]*2, out_features=256),
+            CReLU4Linear(), # CReLU4Linear will double the ouput size
         ]
-        """=============================Plasticine============================="""
+        """------------------------Plasticine------------------------"""
         return nn.Sequential(*conv_seqs)
 
     def gen_policy(self):
-        return layer_init(nn.Linear(256, self.action_dim), std=0.01)
+        return layer_init(nn.Linear(256*2, self.action_dim), std=0.01)
     
     def gen_value(self):
-        return layer_init(nn.Linear(256, 1), std=1)
+        return layer_init(nn.Linear(256*2, 1), std=1)
 
     def get_value(self, x):
         return self.value(self.encoder(x.permute((0, 3, 1, 2)) / 255.0))  # "bhwc" -> "bchw"

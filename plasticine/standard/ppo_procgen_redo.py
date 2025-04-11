@@ -88,6 +88,14 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
+    # Arguments for the ReDo operation
+    redo_tau: float = 0.025
+    """the weight of the ReDo loss"""
+    redo_frequency: int = 10
+    """the frequency of the ReDo operation"""
+    """------------------------Plasticine------------------------"""
+
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -194,8 +202,13 @@ class Agent(nn.Module):
 
     def forward(self, x):
         """for computing the RDU"""
-        return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
+        hidden = self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
+        logits = self.policy(hidden)
+        values = self.value(hidden)
 
+        return logits, hidden
+
+"""------------------------Plasticine------------------------"""
 def redo_reset(model, batch_obs, tau):
     """
     Apply the ReDo operation to the model.
@@ -278,6 +291,7 @@ def reinitialize_weights(module, reset_mask, next_module):
     # Set outgoing weights to zero for reset neurons
     if type(module) == type(next_module):
         next_module.weight.data[:, reset_mask] = 0.0
+"""------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -476,9 +490,11 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # ReDo operation
         if iteration % args.redo_frequency == 0 and iteration > 0:
             redo_reset(agent, b_obs[mb_inds], args.redo_tau)
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

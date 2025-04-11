@@ -78,15 +78,15 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
-    # shrink and perturb arguments
+    # Arguments for the shrink and perturb (SnP) method
     sp_coefficient: float = 0.999999
     """p_new = sp_coefficient * p_current + (1 - sp_coefficient) * p_init"""
-
+    """------------------------Plasticine------------------------"""
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
@@ -134,6 +134,7 @@ class QNetwork(nn.Module):
         x = self.value_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, shrink_p):
         perturb_p = 1.0 - shrink_p
         # shrink the encoder
@@ -149,7 +150,7 @@ class QNetwork(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
-
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -196,6 +197,7 @@ class Actor(nn.Module):
         x = self.policy_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, shrink_p):
         perturb_p = 1.0 - shrink_p
         # shrink the encoder
@@ -211,7 +213,7 @@ class Actor(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
-
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
@@ -356,10 +358,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actor_loss.backward()
                 actor_optimizer.step()
 
+                """------------------------Plasticine------------------------"""
                 # shrink and perturb (step level)
                 actor.shrink_perturb(args.sp_coefficient)
                 qf1.shrink_perturb(args.sp_coefficient)
                 qf2.shrink_perturb(args.sp_coefficient)
+                """------------------------Plasticine------------------------"""
 
                 # get the actor gradient norm but don't clip it
                 actor_grad_norm = torch.nn.utils.clip_grad_norm_(actor.parameters(), 1e10)

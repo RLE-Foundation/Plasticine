@@ -83,9 +83,9 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-
     # shrink and perturb arguments
     sp_type: str = 'soft'
     """the type of shrink and perturb, soft (batch-level) or hard (episode-level)"""
@@ -93,7 +93,7 @@ class Args:
     """the frequency of shrink and perturb (hard)"""
     sp_coefficient: float = 0.999999
     """p_new = sp_coefficient * p_current + (1 - sp_coefficient) * p_init, use a bigger value for snp-hard"""
-    
+    """------------------------Plasticine------------------------"""
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):
@@ -164,6 +164,7 @@ class QNetwork(nn.Module):
     def forward(self, x):
         return self.value(self.encoder(x / 255.0))
     
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, shrink_p):
         perturb_p = 1.0 - shrink_p
         # shrink the encoder
@@ -179,7 +180,7 @@ class QNetwork(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
-
+    """------------------------Plasticine------------------------"""
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     slope = (end_e - start_e) / duration
@@ -330,15 +331,19 @@ if __name__ == "__main__":
                 batch_grad_norm = nn.utils.clip_grad_norm_(q_network.parameters(), args.max_grad_norm)
                 optimizer.step()
 
+                """------------------------Plasticine------------------------"""
                 # shrink and perturb the agent (batch-level)
                 if args.sp_type == 'soft':
                     q_network.shrink_perturb(shrink_p=args.sp_coefficient)
+                """------------------------Plasticine------------------------"""
 
                 total_grad_norm.append(batch_grad_norm.item())
 
+        """------------------------Plasticine------------------------"""
         # shrink and perturb the agent (episode-level)
         if args.sp_type == 'hard' and iteration % args.sp_frequency == 0:
             q_network.shrink_perturb(shrink_p=args.sp_coefficient)
+        """------------------------Plasticine------------------------"""
 
         # compute plasticity metrics
         if iteration % args.plasticity_eval_interval == 0:

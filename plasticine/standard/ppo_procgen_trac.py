@@ -245,8 +245,10 @@ if __name__ == "__main__":
 
     agent = Agent(envs).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+    """------------------------Plasticine------------------------"""
     # TRAC setup
     optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', optimizer)(agent.parameters(), lr=args.learning_rate)
+    """------------------------Plasticine------------------------"""
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)

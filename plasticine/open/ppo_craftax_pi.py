@@ -15,7 +15,7 @@ import jax
 
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
-
+from copy import deepcopy
 
 from craftax.craftax_env import make_craftax_env_from_name
 from plasticine.craftax_wrappers import (LogWrapper, 
@@ -101,6 +101,7 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+"""------------------------Plasticine------------------------"""
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
@@ -123,7 +124,7 @@ class Injector(nn.Module):
 
     def forward(self, x):
         return self.original(x) + self.new_a(x) - self.new_b(x).detach()
-
+"""------------------------Plasticine------------------------"""
 
 class Agent(nn.Module):
     def __init__(self, obs_shape, action_dim):
@@ -188,11 +189,13 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(value_x)
 
+    """------------------------Plasticine------------------------"""
     def inject(self):
         self.policy = Injector(self.policy, 512, self.action_dim)
         self.value = Injector(self.value, 512, 1)
         self.policy.to(next(self.parameters()).device)
         self.value.to(next(self.parameters()).device)
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -411,11 +414,12 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-
+        """------------------------Plasticine------------------------"""
         # plasticity injection at the middle of training
         if iteration % (args.num_iterations // 2) == 0:
             # inject plasticity
             agent.inject()
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

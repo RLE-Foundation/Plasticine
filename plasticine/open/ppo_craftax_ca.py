@@ -116,20 +116,22 @@ class Agent(nn.Module):
 
     def gen_encoder(self):
         # generate the encoder
+        """------------------------Plasticine------------------------"""
         return nn.Sequential(
             layer_init(nn.Linear(self.obs_shape[0], 512)),
             CReLU4Linear(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(512*2, 512)), # CRELU4Linear() doubles the output size
             CReLU4Linear(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(512*2, 512)), # CRELU4Linear() doubles the output size
             CReLU4Linear(),
         )
+        """------------------------Plasticine------------------------"""
 
     def gen_policy(self, action_dim):
-        return layer_init(nn.Linear(512, action_dim), std=0.01)
+        return layer_init(nn.Linear(512*2, action_dim), std=0.01)
 
     def gen_value(self):
-        return layer_init(nn.Linear(512, 1), std=1.0)
+        return layer_init(nn.Linear(512*2, 1), std=1.0)
 
     def get_value(self, x):
         return self.value(self.value_encoder(x))

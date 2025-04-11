@@ -78,16 +78,17 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
-    # resetting layer arguments
+    # Arguments for resetting the layers
     reset_type: str = 'final'
     """the type of resetting layer, can be 'final' or 'all'"""
     reset_frequency: int = 1000
     """the frequency of resetting layer"""
+    """------------------------Plasticine------------------------"""
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -136,6 +137,7 @@ class QNetwork(nn.Module):
         x = self.value_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, reset_type):
         shrink_p, perturb_p = 0.0, 1.0
         if reset_type == 'final':
@@ -160,7 +162,7 @@ class QNetwork(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
-
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -207,6 +209,7 @@ class Actor(nn.Module):
         x = self.policy_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, reset_type):
         shrink_p, perturb_p = 0.0, 1.0
         if reset_type == 'final':
@@ -231,7 +234,7 @@ class Actor(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
-
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
@@ -388,11 +391,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
             
+            """------------------------Plasticine------------------------"""
             # reset the layers
             if global_step % args.reset_frequency == 0:
                 actor.shrink_perturb(args.reset_type)
                 qf1.shrink_perturb(args.reset_type)
                 qf2.shrink_perturb(args.reset_type)
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

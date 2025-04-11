@@ -87,10 +87,6 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
-    # l2 norm arguments
-    weight_decay: float = 1e-3
-    """the weight decay coefficient"""
-
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -98,6 +94,12 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
+
+    """------------------------Plasticine------------------------"""
+    ## Arguments for the L2 Normalization
+    weight_decay: float = 1e-3
+    """the weight decay coefficient"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -213,7 +215,9 @@ if __name__ == "__main__":
 
     # agent setup
     agent = Agent(obs_shape=obs_shape, action_dim=action_dim).to(device)
+    """------------------------Plasticine------------------------"""
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5, weight_decay=args.weight_decay)
+    """------------------------Plasticine------------------------"""
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + obs_shape).to(device)

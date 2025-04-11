@@ -88,11 +88,13 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
-    # resetting layer arguments
+    """------------------------Plasticine------------------------"""
+    # Arguments for resetting the layers
     reset_type: str = 'final'
     """the type of resetting layer, can be 'final' or 'all'"""
     reset_frequency: int = 1000
     """the frequency of resetting layer"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -202,6 +204,7 @@ class Agent(nn.Module):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, reset_type):
         shrink_p, perturb_p = 0.0, 1.0
         if reset_type == 'final':
@@ -227,6 +230,7 @@ class Agent(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
+    """------------------------Plasticine------------------------"""
 
 
 if __name__ == "__main__":
@@ -426,9 +430,11 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # shrink and perturb the agent (episode-level)
         if iteration % args.reset_frequency == 0:
             agent.shrink_perturb(reset_type=args.reset_type)
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

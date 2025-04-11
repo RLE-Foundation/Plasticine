@@ -78,14 +78,15 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
-    # NaP specific arguments
+    # Arguments for the Normalize-and-Project (NaP) method
     projection_interval: int = 10
     """the interval for NaP weight projection"""
+    """------------------------Plasticine------------------------"""
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -111,8 +112,10 @@ class QNetwork(nn.Module):
         self.value_encoder = self.gen_encoder()
         self.value = self.gen_value()
 
+        """------------------------Plasticine------------------------"""
         # record initial norms of all weight parameters for NaP
         self.initial_norms = self._record_initial_norms()
+        """------------------------Plasticine------------------------"""
     
     def gen_encoder(self):
         enc = nn.Sequential(
@@ -137,6 +140,7 @@ class QNetwork(nn.Module):
         x = self.value_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def _record_initial_norms(self):
         """Record initial norms of all weight parameters for NaP"""
         norms = {}
@@ -176,7 +180,7 @@ class QNetwork(nn.Module):
     def nap(self):
         """Perform NaP weight projection at specified intervals"""
         self._project_weights()
-
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -186,8 +190,10 @@ class Actor(nn.Module):
         self.policy_encoder = self.gen_encoder()
         self.policy = self.gen_policy()
         
+        """------------------------Plasticine------------------------"""
         # record initial norms of all weight parameters for NaP
         self.initial_norms = self._record_initial_norms()
+        """------------------------Plasticine------------------------"""
 
         # action rescaling
         self.register_buffer(
@@ -226,6 +232,7 @@ class Actor(nn.Module):
         x = self.policy_encoder(x)
         return x
     
+    """------------------------Plasticine------------------------"""
     def _record_initial_norms(self):
         """Record initial norms of all weight parameters for NaP"""
         norms = {}
@@ -265,6 +272,7 @@ class Actor(nn.Module):
     def nap(self):
         """Perform NaP weight projection at specified intervals"""
         self._project_weights()
+    """------------------------Plasticine------------------------"""
 
 
 if __name__ == "__main__":
@@ -422,11 +430,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
+            """------------------------Plasticine------------------------"""
             # perform NaP weight projection
             if global_step % args.projection_interval == 0:
                 actor.nap()
                 qf1.nap()
                 qf2.nap()
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

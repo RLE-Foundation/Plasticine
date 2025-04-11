@@ -13,6 +13,7 @@ import tyro
 from procgen import ProcgenEnv
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
+from copy import deepcopy
 
 from plasticine.metrics import (compute_dormant_units, 
                                 compute_active_units,
@@ -196,12 +197,15 @@ class Agent(nn.Module):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
+    """------------------------Plasticine------------------------"""
     def inject(self):
             self.policy = Injector(self.policy, 256, self.action_dim)
             self.value = Injector(self.value, 256, 1)
             self.policy.to(next(self.parameters()).device)
             self.value.to(next(self.parameters()).device)
+    """------------------------Plasticine------------------------"""
 
+"""------------------------Plasticine------------------------"""
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
@@ -224,6 +228,7 @@ class Injector(nn.Module):
 
     def forward(self, x):
         return self.original(x) + self.new_a(x) - self.new_b(x).detach()
+"""------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -422,10 +427,12 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # plasticity injection at the middle of training
         if iteration % (args.num_iterations // 2) == 0:
             # inject plasticity
             agent.inject()
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

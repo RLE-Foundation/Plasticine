@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 from torch.utils.tensorboard import SummaryWriter
+from copy import deepcopy
 
 from plasticine.metrics import (compute_active_units,
                                 compute_dormant_units, 
@@ -83,9 +84,10 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-    
+    """------------------------Plasticine------------------------"""
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):
@@ -156,10 +158,13 @@ class QNetwork(nn.Module):
     def forward(self, x):
         return self.value(self.encoder(x / 255.0))
     
+    """------------------------Plasticine------------------------"""
     def inject(self):
         self.value = Injector(self.value, 512, 1)
         self.value.to(next(self.parameters()).device)
+    """------------------------Plasticine------------------------"""
 
+"""------------------------Plasticine------------------------"""
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
@@ -182,7 +187,7 @@ class Injector(nn.Module):
 
     def forward(self, x):
         return self.original(x) + self.new_a(x) - self.new_b(x).detach()
-
+"""------------------------Plasticine------------------------"""
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     slope = (end_e - start_e) / duration
@@ -335,10 +340,12 @@ if __name__ == "__main__":
 
                 total_grad_norm.append(batch_grad_norm.item())
 
+        """------------------------Plasticine------------------------"""
         # plasticity injection at the middle of training
         if iteration % (args.num_iterations // 2) == 0:
             # inject plasticity
             q_network.inject()
+        """------------------------Plasticine------------------------"""
 
         # compute plasticity metrics
         if iteration % args.plasticity_eval_interval == 0:

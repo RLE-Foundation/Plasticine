@@ -88,12 +88,6 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
-    # resetting layer arguments
-    reset_type: str = 'final'
-    """the type of resetting layer, can be 'final' or 'all'"""
-    reset_frequency: int = 1000
-    """the frequency of resetting layer"""
-
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -101,6 +95,14 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
+
+    """------------------------Plasticine------------------------"""
+    # Arguments for resetting the layers
+    reset_type: str = 'final'
+    """the type of resetting layer, can be 'final' or 'all'"""
+    reset_frequency: int = 1000
+    """the frequency of resetting layer"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -417,9 +419,11 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # reset the layers
         if iteration % args.reset_frequency == 0:
             agent.shrink_perturb(reset_type=args.reset_type)
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

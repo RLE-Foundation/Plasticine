@@ -114,18 +114,20 @@ class Agent(nn.Module):
         self.value = self.gen_value()
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         # generate the encoder
         return nn.Sequential(
             layer_init(nn.Linear(self.obs_shape[0], 512)),
-            nn.LayerNorm(512),
+            nn.LayerNorm(512), # add layer norm
             nn.Tanh(),
             layer_init(nn.Linear(512, 512)),
-            nn.LayerNorm(512),
+            nn.LayerNorm(512), # add layer norm
             nn.Tanh(),
             layer_init(nn.Linear(512, 512)),
-            nn.LayerNorm(512),
+            nn.LayerNorm(512), # add layer norm
             nn.Tanh(),
         )
+        """------------------------Plasticine------------------------"""
 
     def gen_policy(self, action_dim):
         return layer_init(nn.Linear(512, action_dim), std=0.01)

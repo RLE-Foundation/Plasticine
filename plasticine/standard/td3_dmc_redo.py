@@ -78,16 +78,17 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
-
-    # ReDo specific arguments
+    # Arguments for the ReDo operation
     redo_tau: float = 0.025
     """the weight of the ReDo loss"""
     redo_frequency: int = 1000
     """the frequency of the ReDo operation"""
+    """------------------------Plasticine------------------------"""
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -181,6 +182,8 @@ class Actor(nn.Module):
     def get_features(self, x):
         x = self.policy_encoder(x)
         return x
+    
+"""------------------------Plasticine------------------------"""
 def redo_reset(model, data, tau, flag):
     """
     Apply the ReDo operation to the model.
@@ -275,6 +278,8 @@ def reinitialize_weights(module, reset_mask, next_module):
     # Set outgoing weights to zero for reset neurons
     if type(module) == type(next_module):
         next_module.weight.data[:, reset_mask] = 0.0
+"""------------------------Plasticine------------------------"""
+
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
@@ -431,11 +436,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
+            """------------------------Plasticine------------------------"""
             # ReDo operation
             if global_step % args.redo_frequency == 0:
                 redo_reset(actor, data, args.redo_tau, flag='policy')
                 redo_reset(qf1, data, args.redo_tau, flag='value')
                 redo_reset(qf2, data, args.redo_tau, flag='value')
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

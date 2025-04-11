@@ -38,6 +38,18 @@ sh scripts/std_ppo_craftax.sh
 
 
 ## Implemented Algorithms and Metrics
+
+In each Python file, the core algorimic logic is marked like
+``` py
+"""------------------------Plasticine------------------------"""
+...
+nn.Linear(512, 512),
+CReLU4Linear(), # CRELU4Linear() doubles the output size
+nn.Linear(512*2, 512), 
+...
+"""------------------------Plasticine------------------------"""
+```
+
 ### Vanilla
 | **Algorithm** | **Standard** | **Continual** | **Open-ended**|
 |:--|:--|:--|:--|

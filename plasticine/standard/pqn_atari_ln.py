@@ -83,9 +83,10 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-    
+    """------------------------Plasticine------------------------"""
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):
@@ -135,6 +136,7 @@ class QNetwork(nn.Module):
         self.value = self.gen_value()
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         return nn.Sequential(
             layer_init(nn.Conv2d(4, 32, 8, stride=4)),
             nn.LayerNorm([32, 20, 20]), # add layer norm
@@ -150,6 +152,7 @@ class QNetwork(nn.Module):
             nn.LayerNorm(512), # add layer norm
             nn.ReLU(),
         )
+        """------------------------Plasticine------------------------"""
     
     def get_features(self, x):
         return self.encoder(x / 255.0)

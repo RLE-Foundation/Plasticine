@@ -83,14 +83,15 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-
-    # Parseval Regularization specific arguments
+    # Arguments for the Parseval Regularization (RR)
     parseval_lambda: float = 1e-3
     """the strength of the Parseval Regularization"""
     parseval_s: float = 1.0
     """the scaling factor of the Parseval Regularization"""
+    """------------------------Plasticine------------------------"""
     
 
 class RecordEpisodeStatistics(gym.Wrapper):
@@ -132,6 +133,7 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+"""------------------------Plasticine------------------------"""
 class ParsevalLinear(nn.Linear):
     """
     Linear layer with Parseval regularization.
@@ -164,6 +166,7 @@ class ParsevalLinear(nn.Linear):
         loss = torch.square(torch.norm(wwt - target, p='fro'))
         
         return self.lambda_reg * loss
+"""------------------------Plasticine------------------------"""
 
 class QNetwork(nn.Module):
     def __init__(self, env):
@@ -173,6 +176,7 @@ class QNetwork(nn.Module):
         self.value = self.gen_value()
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         return nn.Sequential(
             layer_init(nn.Conv2d(4, 32, 8, stride=4)),
             nn.ReLU(),
@@ -184,6 +188,7 @@ class QNetwork(nn.Module):
             layer_init(ParsevalLinear(3136, 512)),
             nn.ReLU(),
         )
+        """------------------------Plasticine------------------------"""
     
     def get_features(self, x):
         return self.encoder(x / 255.0)
@@ -194,6 +199,7 @@ class QNetwork(nn.Module):
     def forward(self, x):
         return self.value(self.encoder(x / 255.0))
 
+    """------------------------Plasticine------------------------"""
     def parseval_regularization_loss(self):
         """
         Compute total Parseval regularization loss across all applicable layers.
@@ -207,6 +213,7 @@ class QNetwork(nn.Module):
                     total_loss = total_loss + layer.parseval_loss()
                     
         return total_loss
+    """------------------------Plasticine------------------------"""
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     slope = (end_e - start_e) / duration
@@ -231,7 +238,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_pqn_atari_vanilla_runs'
+    log_dir = 'std_pqn_atari_pr_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -351,8 +358,10 @@ if __name__ == "__main__":
                 old_val = q_network(b_obs[mb_inds]).gather(1, b_actions[mb_inds].unsqueeze(-1).long()).squeeze()
                 loss = F.mse_loss(b_returns[mb_inds], old_val)
 
+                """------------------------Plasticine------------------------"""
                 # add the Parseval Regularization loss
                 loss += q_network.parseval_regularization_loss()
+                """------------------------Plasticine------------------------"""
 
                 # optimize the model
                 optimizer.zero_grad()

@@ -204,6 +204,7 @@ class Agent(nn.Module):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
+    """------------------------Plasticine------------------------"""
     def shrink_perturb(self, shrink_p):
         perturb_p = 1.0 - shrink_p
         # shrink the encoder
@@ -221,6 +222,7 @@ class Agent(nn.Module):
         for idx, current_param in enumerate(current_module.parameters()):
             current_param.data *= shrink_factor
             current_param.data += epsilon * init_params[idx].data
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -403,9 +405,11 @@ if __name__ == "__main__":
                 batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                 optimizer.step()
 
+                """------------------------Plasticine------------------------"""
                 # shrink and perturb the agent (batch-level)
                 if args.sp_type == 'soft':
                     agent.shrink_perturb(shrink_p=args.sp_coefficient)
+                """------------------------Plasticine------------------------"""
 
                 # log plasticity metrics
                 total_active_units.append(plasticity_metrics["active_units"])
@@ -423,15 +427,17 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        """------------------------Plasticine------------------------"""
         # shrink and perturb the agent (episode-level)
         if args.sp_type == 'hard' and iteration % args.sp_frequency == 0:
             agent.shrink_perturb(shrink_p=args.sp_coefficient)
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
         # compute weight magnitude
         weight_magnitude = compute_weight_magnitude(agent)
-
+        
         # compute dormant units
         if iteration % 10 == 0:
             dormant_units = compute_dormant_units(agent, b_obs[mb_inds], 'relu', tau=0.025)

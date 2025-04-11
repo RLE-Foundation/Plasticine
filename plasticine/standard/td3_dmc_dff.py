@@ -79,10 +79,12 @@ class Args:
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 1000
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
+    """------------------------Plasticine------------------------"""
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -109,16 +111,18 @@ class QNetwork(nn.Module):
         self.value = self.gen_value()
     
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
-            DFFLayer4Linear(),
-            nn.Linear(256, 256),
-            DFFLayer4Linear(),
+            DFFLayer4Linear(), # DFFLayer4Linear will double the output size
+            nn.Linear(256*2, 256),
+            DFFLayer4Linear(), # DFFLayer4Linear will double the output size
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_value(self):
-        return nn.Linear(256, 1)
+        return nn.Linear(256*2, 1)
 
     def forward(self, x, a):
         x = torch.cat([x, a], 1)
@@ -157,16 +161,18 @@ class Actor(nn.Module):
         )
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
-            DFFLayer4Linear(),
-            nn.Linear(256, 256),
-            DFFLayer4Linear(),
+            DFFLayer4Linear(), # DFFLayer4Linear will double the output size
+            nn.Linear(256*2, 256),
+            DFFLayer4Linear(), # DFFLayer4Linear will double the output size
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_policy(self):
-        return nn.Linear(256, self.action_dim)
+        return nn.Linear(256*2, self.action_dim)
     
     def forward(self, x):
         x = self.policy_encoder(x)

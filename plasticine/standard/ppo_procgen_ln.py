@@ -103,6 +103,7 @@ class ResidualBlock(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
         self.relu1 = nn.ReLU()
         self.relu2 = nn.ReLU()
+        """------------------------Plasticine------------------------"""
         self.norm0 = nn.LayerNorm(channels)
         self.norm1 = nn.LayerNorm(channels)
 
@@ -115,6 +116,7 @@ class ResidualBlock(nn.Module):
         x = self.norm1(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)  # add LayerNorm
         x = self.conv1(x)
         return x + inputs
+        """------------------------Plasticine------------------------"""
 
 
 class ConvSequence(nn.Module):
@@ -125,12 +127,16 @@ class ConvSequence(nn.Module):
         self.conv = nn.Conv2d(in_channels=self._input_shape[0], out_channels=self._out_channels, kernel_size=3, padding=1)
         self.res_block0 = ResidualBlock(self._out_channels)
         self.res_block1 = ResidualBlock(self._out_channels)
+        """------------------------Plasticine------------------------"""
         self.norm = nn.LayerNorm(out_channels)
+        """------------------------Plasticine------------------------"""
 
     def forward(self, x):
         x = self.conv(x)
         x = nn.functional.max_pool2d(x, kernel_size=3, stride=2, padding=1)
+        """------------------------Plasticine------------------------"""
         x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2) # add LayerNorm
+        """------------------------Plasticine------------------------"""
         x = self.res_block0(x)
         x = self.res_block1(x)
         assert x.shape[1:] == self.get_output_shape()

@@ -83,15 +83,16 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-    
-    # ReDo specific arguments
+    # Arguments for the ReDo operation
     redo_tau: float = 0.025
     """the weight of the ReDo loss"""
     redo_frequency: int = 10
     """the frequency of the ReDo operation"""
-    
+    """------------------------Plasticine------------------------"""
+
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):
@@ -413,9 +414,11 @@ if __name__ == "__main__":
 
                 total_grad_norm.append(batch_grad_norm.item())
 
+        """------------------------Plasticine------------------------"""
         # ReDo operation
         if iteration % args.redo_frequency == 0 and iteration > 0:
             redo_reset(q_network, b_obs[mb_inds], args.redo_tau)
+        """------------------------Plasticine------------------------"""
 
         # compute plasticity metrics
         if iteration % args.plasticity_eval_interval == 0:

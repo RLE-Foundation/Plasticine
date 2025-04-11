@@ -88,11 +88,13 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
-    # Parseval Regularization specific arguments
+    """------------------------Plasticine------------------------"""
+    # Arguments for the Parseval Regularization (PR)
     parseval_lambda: float = 1e-3
     """the strength of the Parseval Regularization"""
     parseval_s: float = 1.0
     """the scaling factor of the Parseval Regularization"""
+    """------------------------Plasticine------------------------"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -137,6 +139,7 @@ class ConvSequence(nn.Module):
         _c, h, w = self._input_shape
         return (self._out_channels, (h + 1) // 2, (w + 1) // 2)
 
+"""------------------------Plasticine------------------------"""
 class ParsevalLinear(nn.Linear):
     """
     Linear layer with Parseval regularization.
@@ -169,6 +172,7 @@ class ParsevalLinear(nn.Linear):
         loss = torch.square(torch.norm(wwt - target, p='fro'))
         
         return self.lambda_reg * loss
+"""------------------------Plasticine------------------------"""
 
 class Agent(nn.Module):
     def __init__(self, envs, parseval_lambda, parseval_s):
@@ -193,10 +197,12 @@ class Agent(nn.Module):
         conv_seqs += [
             nn.Flatten(),
             nn.ReLU(),
+            """------------------------Plasticine------------------------"""
             ParsevalLinear(in_features=shape[0] * shape[1] * shape[2], 
                            out_features=256,
                            lambda_reg=self.parseval_lambda,
                            s=self.parseval_s),
+            """------------------------Plasticine------------------------"""
             nn.ReLU(),
         ]
         return nn.Sequential(*conv_seqs)
@@ -238,7 +244,8 @@ class Agent(nn.Module):
     def forward(self, x):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
-
+    
+    """------------------------Plasticine------------------------"""
     def parseval_regularization_loss(self):
         """
         Compute total Parseval regularization loss across all applicable layers.
@@ -252,6 +259,7 @@ class Agent(nn.Module):
                     total_loss = total_loss + layer.parseval_loss()
                     
         return total_loss
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     args = tyro.cli(Args)

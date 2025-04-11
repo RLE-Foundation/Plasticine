@@ -84,13 +84,13 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    """------------------------Plasticine------------------------"""
     plasticity_eval_interval: int = 10
     """the interval of evaluating the plasticity metrics"""
-
     # Regenerative Regularization arguments
     rr_weight: float = 0.01
     """the weight of the regenerative regularization loss"""
-    
+    """------------------------Plasticine------------------------"""
 
 class RecordEpisodeStatistics(gym.Wrapper):
     def __init__(self, env, deque_size=100):
@@ -306,11 +306,13 @@ if __name__ == "__main__":
                 old_val = q_network(b_obs[mb_inds]).gather(1, b_actions[mb_inds].unsqueeze(-1).long()).squeeze()
                 loss = F.mse_loss(b_returns[mb_inds], old_val)
 
+                """------------------------Plasticine------------------------"""
                 # Regenerative Regularization
                 params = torch.cat([p.view(-1) for p in q_network.parameters()])
                 params_0 = torch.cat([p.view(-1) for p in init_q_network.parameters()])
                 l2 = torch.norm(params - params_0.detach(), 2)
                 loss += args.rr_weight * l2
+                """------------------------Plasticine------------------------"""
 
                 # optimize the model
                 optimizer.zero_grad()
