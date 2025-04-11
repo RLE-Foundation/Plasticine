@@ -95,23 +95,11 @@ class Args:
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
-        # 如果是DM Control环境（例如"cheetah-run"格式）
         if "_" in env_id:
             domain_name, task_name = env_id.split("_")
             env = wrappers.DeepMindControl(
                 env_id=env_id
             )
-            # env = wrappers.DeepMindControl(task_name)
-            # env = dmc2gym.make(
-            #     domain_name=domain_name,
-            #     task_name=task_name,
-            #     seed=seed,
-            #     from_pixels=True,
-            #     height=84,
-            #     width=84,
-            #     frame_skip=1,
-            #     channels_first=True,
-            # )
         else:
             # 普通Gymnasium环境
             env = gym.make(env_id)
@@ -119,41 +107,12 @@ def make_env(env_id, seed, idx, capture_video, run_name):
             env.action_space.seed(seed)
             env.observation_space.seed(seed)
 
-        # 添加视频录制包装器
         if capture_video and idx == 0:
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         
         return env
 
     return thunk
-
-# def make_env(env_id, seed, idx, capture_video, run_name):
-#     def thunk():
-#         '''
-#         if capture_video and idx == 0:
-#             env = gym.make(env_id, render_mode="rgb_array")
-#             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-#         else:
-#             env = gym.make(env_id)
-#         '''
-#         if env_id == 'ball_in_cup_catch':
-#             domain_name = 'ball_in_cup'
-#             task_name = 'catch'
-#         else:
-#             domain_name = env_id.split('_')[0]
-#             task_name = '_'.join(env_id.split('_')[1:])
-#         # breakpoint()
-#         env = dmc2gym.make(domain_name=domain_name,
-#                         task_name=task_name,
-#                         seed=seed,
-#                         visualize_reward=True) 
-        
-#         env = gym.wrappers.RecordEpisodeStatistics(env)
-#         env.action_space.seed(seed)
-#         return env
-
-#     return thunk
-
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
@@ -246,7 +205,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     args = tyro.cli(Args)
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     
-    # 初始化模型和优化器
     actor = None
     qf1 = None
     qf2 = None
@@ -257,15 +215,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     actor_optimizer = None
 
     global_timestamp = int(time.time())
-    # breakpoint()
+   
     for env_id in args.env_ids:
         # run_name = f"{env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
         log_dir = 'std_td3_mujoco_vanilla_runs'
         parent_dir = f"{log_dir}/{args.exp_name}_{args.seed}_{global_timestamp}"
-        
-        
-        
-        # breakpoint()
         run_name = parent_dir
         if args.track:
             import wandb
@@ -301,7 +255,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         )
         assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
-        if actor is None:  # 第一次运行，初始化模型
+        if actor is None:  
             actor = Actor(envs).to(device)
             qf1 = QNetwork(envs).to(device)
             qf2 = QNetwork(envs).to(device)
@@ -313,15 +267,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             qf2_target.load_state_dict(qf2.state_dict())
             q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
             actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
-        else:  # 后续任务，加载之前保存的模型
-            # history_runs = glob.glob(f"{parent_dir}/*")
+        else:  
             history_runs = [d for d in glob.glob(f"{parent_dir}/*") if os.path.isdir(d)]
-            # breakpoint()
+           
             if history_runs:
                 latest_run = max(history_runs, key=os.path.getctime)
                 source_agent = f"{latest_run}/{env_id}/agent.pth"
             if os.path.exists(source_agent):
-                print(f"🚀 Loading {env_id} model from {latest_run}")
+                print(f"Loading {env_id} model from {latest_run}")
                 actor.load_state_dict(torch.load(f"{log_dir}/{latest_run}/{env_id}/agent.pth"))
                 qf1.load_state_dict(torch.load(f"{log_dir}/{latest_run}/{env_id}/qf1.pth"))
                 qf2.load_state_dict(torch.load(f"{log_dir}/{latest_run}/{env_id}/qf2.pth"))
@@ -329,12 +282,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 qf1_target.load_state_dict(qf1.state_dict())
                 qf2_target.load_state_dict(qf2.state_dict())
             
-            # actor.load_state_dict(torch.load(f"{log_dir}/agent.pth"))
-            # qf1.load_state_dict(torch.load(f"{log_dir}/qf1.pth"))
-            # qf2.load_state_dict(torch.load(f"{log_dir}/qf2.pth"))
-            # target_actor.load_state_dict(actor.state_dict())
-            # qf1_target.load_state_dict(qf1.state_dict())
-            # qf2_target.load_state_dict(qf2.state_dict())
 
         # save the initial state of the model
         actor_copy = save_model_state(actor)
@@ -386,7 +333,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             obs = next_obs
 
             # ALGO LOGIC: training.
-            # breakpoint()
+           
             if global_step > args.learning_starts:
                 data = rb.sample(args.batch_size)
                 with torch.no_grad():
@@ -465,7 +412,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         writer.close()
 
         # save model
-        # breakpoint()
+       
         torch.save(actor.state_dict(), f"{env_subdir}/agent.pth")
         torch.save(qf1.state_dict(), f"{env_subdir}/qf1.pth")
         torch.save(qf2.state_dict(), f"{env_subdir}/qf2.pth")

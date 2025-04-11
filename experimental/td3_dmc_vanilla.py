@@ -92,64 +92,23 @@ class Args:
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
-        # 如果是DM Control环境（例如"cheetah-run"格式）
         if "_" in env_id:
             domain_name, task_name = env_id.split("_")
             env = wrappers.DeepMindControl(
                 env_id=env_id
             )
-            # env = wrappers.DeepMindControl(task_name)
-            # env = dmc2gym.make(
-            #     domain_name=domain_name,
-            #     task_name=task_name,
-            #     seed=seed,
-            #     from_pixels=True,
-            #     height=84,
-            #     width=84,
-            #     frame_skip=1,
-            #     channels_first=True,
-            # )
         else:
-            # 普通Gymnasium环境
             env = gym.make(env_id)
             env = gym.wrappers.RecordEpisodeStatistics(env)
             env.action_space.seed(seed)
             env.observation_space.seed(seed)
 
-        # 添加视频录制包装器
         if capture_video and idx == 0:
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         
         return env
 
     return thunk
-
-# def make_env(env_id, seed, idx, capture_video, run_name):
-#     def thunk():
-#         '''
-#         if capture_video and idx == 0:
-#             env = gym.make(env_id, render_mode="rgb_array")
-#             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-#         else:
-#             env = gym.make(env_id)
-#         '''
-#         if env_id == 'ball_in_cup_catch':
-#             domain_name = 'ball_in_cup'
-#             task_name = 'catch'
-#         else:
-#             domain_name = env_id.split('_')[0]
-#             task_name = '_'.join(env_id.split('_')[1:])
-#         # breakpoint()
-#         env = dmc2gym.make(domain_name=domain_name,
-#                         task_name=task_name,
-#                         seed=seed,
-#                         visualize_reward=True) 
-        
-#         env = gym.wrappers.RecordEpisodeStatistics(env)
-#         env.action_space.seed(seed)
-#         return env
-
-#     return thunk
 
 
 # ALGO LOGIC: initialize agent here:
