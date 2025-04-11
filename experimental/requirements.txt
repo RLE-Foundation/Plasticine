@@ -7,5 +7,3 @@ stable-baselines3
 tensorboard
 imageio
 wandb
-gym
-git+git://github.com/denisyarats/dmc2gym.git
