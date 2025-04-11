@@ -5,16 +5,14 @@ import time
 from dataclasses import dataclass
 
 import gymnasium as gym
-# import gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import tyro
-import dmc2gym
 
-import wrappers
+import dmc_wrappers
 
 os.environ['MUJOCO_GL'] = 'egl'
 
@@ -94,7 +92,7 @@ def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if "_" in env_id:
             domain_name, task_name = env_id.split("_")
-            env = wrappers.DeepMindControl(
+            env = dmc_wrappers.DeepMindControl(
                 env_id=env_id
             )
         else:
@@ -193,15 +191,14 @@ class Actor(nn.Module):
 if __name__ == "__main__":
     import stable_baselines3 as sb3
 
-#     if sb3.__version__ < "2.0":
-#          raise ValueError(
-#             """Ongoing migration: run the following command to install the new dependencies:
-# poetry run pip install "stable_baselines3==2.0.0a1"
-# """
-#         )
+    if sb3.__version__ < "2.0":
+         raise ValueError(
+            """Ongoing migration: run the following command to install the new dependencies:
+poetry run pip install "stable_baselines3==2.0.0a1"
+"""
+        )
 
     args = tyro.cli(Args)
-    # breakpoint()
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb

@@ -6,16 +6,14 @@ from dataclasses import dataclass,field
 import glob
 
 import gymnasium as gym
-# import gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import tyro
-import dmc2gym
 
-import wrappers
+import dmc_wrappers
 
 os.environ['MUJOCO_GL'] = 'egl'
 
@@ -97,11 +95,10 @@ def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if "_" in env_id:
             domain_name, task_name = env_id.split("_")
-            env = wrappers.DeepMindControl(
+            env = dmc_wrappers.DeepMindControl(
                 env_id=env_id
             )
         else:
-            # 普通Gymnasium环境
             env = gym.make(env_id)
             env = gym.wrappers.RecordEpisodeStatistics(env)
             env.action_space.seed(seed)
