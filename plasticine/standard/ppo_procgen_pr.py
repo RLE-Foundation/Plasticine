@@ -88,6 +88,12 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    # Parseval Regularization specific arguments
+    parseval_lambda: float = 1e-3
+    """the strength of the Parseval Regularization"""
+    parseval_s: float = 1.0
+    """the scaling factor of the Parseval Regularization"""
+
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -131,12 +137,46 @@ class ConvSequence(nn.Module):
         _c, h, w = self._input_shape
         return (self._out_channels, (h + 1) // 2, (w + 1) // 2)
 
+class ParsevalLinear(nn.Linear):
+    """
+    Linear layer with Parseval regularization.
+    
+    Args:
+        Same as nn.Linear plus:
+        lambda_reg (float): Regularization strength
+        s (float): Target scale for singular values
+    """
+    def __init__(self, in_features, out_features, bias=True, lambda_reg=1e-3, s=1.0):
+        super().__init__(in_features, out_features, bias)
+        self.lambda_reg = lambda_reg
+        self.s = s
+        
+    def parseval_loss(self):
+        """
+        Computes the Parseval regularization loss for this layer's weight matrix.
+        """
+        # Skip if not training or regularization is disabled
+        if not self.training or self.lambda_reg <= 0:
+            return torch.tensor(0.0, device=self.weight.device)
+            
+        # Compute WW^T
+        wwt = torch.mm(self.weight, self.weight.t())
+        
+        # Target is s*I
+        target = self.s * torch.eye(wwt.shape[0], device=self.weight.device)
+        
+        # Frobenius norm squared of difference
+        loss = torch.square(torch.norm(wwt - target, p='fro'))
+        
+        return self.lambda_reg * loss
 
 class Agent(nn.Module):
-    def __init__(self, envs):
+    def __init__(self, envs, parseval_lambda, parseval_s):
         super().__init__()
         self.obs_shape = envs.single_observation_space.shape
         self.action_dim = envs.single_action_space.n
+        self.parseval_lambda = parseval_lambda
+        self.parseval_s = parseval_s
 
         self.encoder = self.gen_encoder()
         self.policy = self.gen_policy()
@@ -153,7 +193,10 @@ class Agent(nn.Module):
         conv_seqs += [
             nn.Flatten(),
             nn.ReLU(),
-            nn.Linear(in_features=shape[0] * shape[1] * shape[2], out_features=256),
+            ParsevalLinear(in_features=shape[0] * shape[1] * shape[2], 
+                           out_features=256,
+                           lambda_reg=self.parseval_lambda,
+                           s=self.parseval_s),
             nn.ReLU(),
         ]
         return nn.Sequential(*conv_seqs)
@@ -196,34 +239,19 @@ class Agent(nn.Module):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
-    def inject(self):
-            self.policy = Injector(self.policy, 256, self.action_dim)
-            self.value = Injector(self.value, 256, 1)
-            self.policy.to(next(self.parameters()).device)
-            self.value.to(next(self.parameters()).device)
-
-class Injector(nn.Module):
-    def __init__(self, original, in_size=256, out_size=10):
-        super(Injector, self).__init__()
-        if type(original) == nn.Linear:
-            self.original = original
-        elif type(original) == Injector:
-            self.original = nn.Linear(in_size, out_size)
-            aw = original.original.weight
-            bw = original.new_a.weight
-            cw = original.new_b.weight
-            self.original.weight = nn.Parameter(aw + bw - cw)
-            ab = original.original.bias
-            bb = original.new_a.bias
-            cb = original.new_b.bias
-            self.original.bias = nn.Parameter(ab + bb - cb)
-        else:
-            raise NotImplementedError
-        self.new_a = nn.Linear(in_size, out_size)
-        self.new_b = deepcopy(self.new_a)
-
-    def forward(self, x):
-        return self.original(x) + self.new_a(x) - self.new_b(x).detach()
+    def parseval_regularization_loss(self):
+        """
+        Compute total Parseval regularization loss across all applicable layers.
+        """
+        total_loss = torch.tensor(0.0, device=next(self.parameters()).device)
+        
+        # Check all modules in policy and value encoders
+        for module in [self.encoder]:
+            for layer in module:
+                if isinstance(layer, ParsevalLinear):
+                    total_loss = total_loss + layer.parseval_loss()
+                    
+        return total_loss
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -243,7 +271,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_procgen_pi_runs'
+    log_dir = 'std_ppo_procgen_pr_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -271,7 +299,7 @@ if __name__ == "__main__":
     envs = gym.wrappers.TransformReward(envs, lambda reward: np.clip(reward, -10, 10))
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-    agent = Agent(envs).to(device)
+    agent = Agent(envs, args.parseval_lambda, args.parseval_s).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
@@ -400,6 +428,8 @@ if __name__ == "__main__":
 
                 entropy_loss = entropy.mean()
                 loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
+                # add the Parseval Regularization loss
+                loss += agent.parseval_regularization_loss()
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -421,11 +451,6 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-
-        # plasticity injection at the middle of training
-        if iteration % (args.num_iterations // 2) == 0:
-            # inject plasticity
-            agent.inject()
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

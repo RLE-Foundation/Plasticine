@@ -88,6 +88,14 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    # shrink and perturb arguments
+    sp_type: str = 'soft'
+    """the type of shrink and perturb, soft (batch-level) or hard (episode-level)"""
+    sp_frequency: int = 10
+    """the frequency of shrink and perturb (hard)"""
+    sp_coefficient: float = 0.999999
+    """p_new = sp_coefficient * p_current + (1 - sp_coefficient) * p_init, use a bigger value for snp-hard"""
+
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -196,34 +204,23 @@ class Agent(nn.Module):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
-    def inject(self):
-            self.policy = Injector(self.policy, 256, self.action_dim)
-            self.value = Injector(self.value, 256, 1)
-            self.policy.to(next(self.parameters()).device)
-            self.value.to(next(self.parameters()).device)
+    def shrink_perturb(self, shrink_p):
+        perturb_p = 1.0 - shrink_p
+        # shrink the encoder
+        new_enc = self.gen_encoder()
+        self.sp_module(self.encoder, new_enc, shrink_p, perturb_p)
+        # shrink the value and policy
+        new_value = self.gen_value()
+        self.sp_module(self.value, new_value, shrink_p, perturb_p)
+        new_policy = self.gen_policy()
+        self.sp_module(self.policy, new_policy, shrink_p, perturb_p)
 
-class Injector(nn.Module):
-    def __init__(self, original, in_size=256, out_size=10):
-        super(Injector, self).__init__()
-        if type(original) == nn.Linear:
-            self.original = original
-        elif type(original) == Injector:
-            self.original = nn.Linear(in_size, out_size)
-            aw = original.original.weight
-            bw = original.new_a.weight
-            cw = original.new_b.weight
-            self.original.weight = nn.Parameter(aw + bw - cw)
-            ab = original.original.bias
-            bb = original.new_a.bias
-            cb = original.new_b.bias
-            self.original.bias = nn.Parameter(ab + bb - cb)
-        else:
-            raise NotImplementedError
-        self.new_a = nn.Linear(in_size, out_size)
-        self.new_b = deepcopy(self.new_a)
-
-    def forward(self, x):
-        return self.original(x) + self.new_a(x) - self.new_b(x).detach()
+    def sp_module(self, current_module, init_module, shrink_factor, epsilon):
+        use_device = next(current_module.parameters()).device
+        init_params = list(init_module.to(use_device).parameters())
+        for idx, current_param in enumerate(current_module.parameters()):
+            current_param.data *= shrink_factor
+            current_param.data += epsilon * init_params[idx].data
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -243,7 +240,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_procgen_pi_runs'
+    log_dir = 'std_ppo_procgen_snp_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -406,6 +403,10 @@ if __name__ == "__main__":
                 batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                 optimizer.step()
 
+                # shrink and perturb the agent (batch-level)
+                if args.sp_type == 'soft':
+                    agent.shrink_perturb(shrink_p=args.sp_coefficient)
+
                 # log plasticity metrics
                 total_active_units.append(plasticity_metrics["active_units"])
                 total_stable_rank.append(plasticity_metrics["stable_rank"])
@@ -422,10 +423,9 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        # plasticity injection at the middle of training
-        if iteration % (args.num_iterations // 2) == 0:
-            # inject plasticity
-            agent.inject()
+        # shrink and perturb the agent (episode-level)
+        if args.sp_type == 'hard' and iteration % args.sp_frequency == 0:
+            agent.shrink_perturb(shrink_p=args.sp_coefficient)
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

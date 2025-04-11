@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from copy import deepcopy
 
 from plasticine.metrics import (compute_dormant_units, 
+                                compute_active_units,
                                 compute_stable_rank, 
                                 compute_effective_rank, 
                                 compute_feature_norm, 
@@ -80,10 +81,6 @@ class Args:
     target_kl: float = None
     """the target KL divergence threshold"""
 
-    # Regenerative Regularization arguments
-    rr_weight: float = 0.01
-    """the weight of the regenerative regularization loss"""
-
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -91,6 +88,10 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
+
+    # Regenerative Regularization arguments
+    rr_weight: float = 0.01
+    """the weight of the regenerative regularization loss"""
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -103,16 +104,15 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
-        self.conv0 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
-        self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
-
+        self.block = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        )
+        
     def forward(self, x):
-        inputs = x
-        x = nn.functional.relu(x)
-        x = self.conv0(x)
-        x = nn.functional.relu(x)
-        x = self.conv1(x)
-        return x + inputs
+        return self.block(x) + x
 
 
 class ConvSequence(nn.Module):
@@ -181,13 +181,13 @@ class Agent(nn.Module):
 
         if check:
             with torch.no_grad():
-                dead_units = compute_dormant_units(hidden, 'relu')
+                active_units = compute_active_units(hidden, 'relu')
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
                 feature_norm = compute_feature_norm(hidden)
                 feature_var = compute_feature_variance(hidden)
                 plasticity_metrics = {
-                    "dormant_units": dead_units.item(),
+                    "active_units": active_units.item(),
                     "stable_rank": stable_rank.item(),
                     "effective_rank": effective_rank.item(),
                     "feature_norm": feature_norm.item(),
@@ -197,6 +197,9 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(hidden)
 
+    def forward(self, x):
+        """for computing the RDU"""
+        return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -322,7 +325,7 @@ if __name__ == "__main__":
         clipfracs = []
 
         # plasticity metrics
-        total_dormant_units = []
+        total_active_units = []
         total_stable_rank = []
         total_effective_rank = []
         total_grad_norm = []
@@ -387,7 +390,7 @@ if __name__ == "__main__":
                 optimizer.step()
 
                 # log plasticity metrics
-                total_dormant_units.append(plasticity_metrics["dormant_units"])
+                total_active_units.append(plasticity_metrics["active_units"])
                 total_stable_rank.append(plasticity_metrics["stable_rank"])
                 total_effective_rank.append(plasticity_metrics["effective_rank"])
                 total_feature_norm.append(plasticity_metrics["feature_norm"])
@@ -407,6 +410,11 @@ if __name__ == "__main__":
         # compute weight magnitude
         weight_magnitude = compute_weight_magnitude(agent)
 
+        # compute dormant units
+        if iteration % 10 == 0:
+            dormant_units = compute_dormant_units(agent, b_obs[mb_inds], 'relu', tau=0.025)
+            writer.add_scalar("plasticity/dormant_units", dormant_units, global_step)
+
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
@@ -417,7 +425,7 @@ if __name__ == "__main__":
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
         # add plasticity metrics
-        writer.add_scalar("plasticity/dormant_units", np.mean(total_dormant_units), global_step)
+        writer.add_scalar("plasticity/active_units", np.mean(total_active_units), global_step)
         writer.add_scalar("plasticity/stable_rank", np.mean(total_stable_rank), global_step)
         writer.add_scalar("plasticity/effective_rank", np.mean(total_effective_rank), global_step)
         writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)

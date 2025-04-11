@@ -24,6 +24,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.utils import DFFLayer4Conv2d, DFFLayer4Linear
 
 @dataclass
 class Args:
@@ -99,12 +100,15 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
+
+        """=============================Plasticine============================="""
         self.block = nn.Sequential(
-            nn.ReLU(),
+            DFFLayer4Conv2d(),
             nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1),
-            nn.ReLU(),
+            DFFLayer4Conv2d(),
             nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
         )
+        """=============================Plasticine============================="""
         
     def forward(self, x):
         return self.block(x) + x
@@ -150,12 +154,14 @@ class Agent(nn.Module):
             conv_seq = ConvSequence(shape, out_channels)
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
+        """=============================Plasticine============================="""
         conv_seqs += [
             nn.Flatten(),
-            nn.ReLU(),
+            DFFLayer4Linear(),
             nn.Linear(in_features=shape[0] * shape[1] * shape[2], out_features=256),
-            nn.ReLU(),
+            DFFLayer4Linear(),
         ]
+        """=============================Plasticine============================="""
         return nn.Sequential(*conv_seqs)
 
     def gen_policy(self):
@@ -176,7 +182,7 @@ class Agent(nn.Module):
 
         if check:
             with torch.no_grad():
-                active_units = compute_active_units(hidden, 'relu')
+                active_units = compute_active_units(hidden, 'dff')
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
                 feature_norm = compute_feature_norm(hidden)
@@ -196,35 +202,6 @@ class Agent(nn.Module):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
-    def inject(self):
-            self.policy = Injector(self.policy, 256, self.action_dim)
-            self.value = Injector(self.value, 256, 1)
-            self.policy.to(next(self.parameters()).device)
-            self.value.to(next(self.parameters()).device)
-
-class Injector(nn.Module):
-    def __init__(self, original, in_size=256, out_size=10):
-        super(Injector, self).__init__()
-        if type(original) == nn.Linear:
-            self.original = original
-        elif type(original) == Injector:
-            self.original = nn.Linear(in_size, out_size)
-            aw = original.original.weight
-            bw = original.new_a.weight
-            cw = original.new_b.weight
-            self.original.weight = nn.Parameter(aw + bw - cw)
-            ab = original.original.bias
-            bb = original.new_a.bias
-            cb = original.new_b.bias
-            self.original.bias = nn.Parameter(ab + bb - cb)
-        else:
-            raise NotImplementedError
-        self.new_a = nn.Linear(in_size, out_size)
-        self.new_b = deepcopy(self.new_a)
-
-    def forward(self, x):
-        return self.original(x) + self.new_a(x) - self.new_b(x).detach()
-
 if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
@@ -243,7 +220,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_procgen_pi_runs'
+    log_dir = 'std_ppo_procgen_dff_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -422,11 +399,6 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        # plasticity injection at the middle of training
-        if iteration % (args.num_iterations // 2) == 0:
-            # inject plasticity
-            agent.inject()
-
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
         # compute weight magnitude
@@ -434,7 +406,7 @@ if __name__ == "__main__":
 
         # compute dormant units
         if iteration % 10 == 0:
-            dormant_units = compute_dormant_units(agent, b_obs[mb_inds], 'relu', tau=0.025)
+            dormant_units = compute_dormant_units(agent, b_obs[mb_inds], 'dff', tau=0.025)
             writer.add_scalar("plasticity/dormant_units", dormant_units, global_step)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes

@@ -24,6 +24,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.trac import start_trac
 
 @dataclass
 class Args:
@@ -196,35 +197,6 @@ class Agent(nn.Module):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
-    def inject(self):
-            self.policy = Injector(self.policy, 256, self.action_dim)
-            self.value = Injector(self.value, 256, 1)
-            self.policy.to(next(self.parameters()).device)
-            self.value.to(next(self.parameters()).device)
-
-class Injector(nn.Module):
-    def __init__(self, original, in_size=256, out_size=10):
-        super(Injector, self).__init__()
-        if type(original) == nn.Linear:
-            self.original = original
-        elif type(original) == Injector:
-            self.original = nn.Linear(in_size, out_size)
-            aw = original.original.weight
-            bw = original.new_a.weight
-            cw = original.new_b.weight
-            self.original.weight = nn.Parameter(aw + bw - cw)
-            ab = original.original.bias
-            bb = original.new_a.bias
-            cb = original.new_b.bias
-            self.original.bias = nn.Parameter(ab + bb - cb)
-        else:
-            raise NotImplementedError
-        self.new_a = nn.Linear(in_size, out_size)
-        self.new_b = deepcopy(self.new_a)
-
-    def forward(self, x):
-        return self.original(x) + self.new_a(x) - self.new_b(x).detach()
-
 if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
@@ -243,7 +215,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_procgen_pi_runs'
+    log_dir = 'std_ppo_procgen_trac_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -273,6 +245,8 @@ if __name__ == "__main__":
 
     agent = Agent(envs).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+    # TRAC setup
+    optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', optimizer)(agent.parameters(), lr=args.learning_rate)
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
@@ -421,11 +395,6 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-
-        # plasticity injection at the middle of training
-        if iteration % (args.num_iterations // 2) == 0:
-            # inject plasticity
-            agent.inject()
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

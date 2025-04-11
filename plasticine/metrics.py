@@ -32,7 +32,13 @@ def compute_dormant_units(model: torch.nn.Module, data: torch.Tensor, activation
         def hook(module, input, output):
             activations[module] = output.detach()
 
-        act_set = (torch.nn.ReLU, torch.nn.Tanh, torch.nn.Sigmoid, CReLU4Linear, CReLU4Conv2d, DFFLayer4Linear, DFFLayer4Conv2d)
+        act_set = (torch.nn.ReLU, 
+                   torch.nn.Tanh, 
+                   torch.nn.Sigmoid, 
+                   CReLU4Linear, 
+                   CReLU4Conv2d, 
+                   DFFLayer4Linear, 
+                   DFFLayer4Conv2d)
 
         for name, module in model.named_modules():
             if isinstance(module, act_set):
