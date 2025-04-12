@@ -76,7 +76,7 @@ def run(time_limit=_DEFAULT_TIME_LIMIT, random=None, environment_kwargs=None):
   xml_path = environment_kwargs['xml_path']
   physics = Physics.from_xml_string(*get_model_and_assets(xml_path=xml_path))
   task = Humanoid(move_speed=_RUN_SPEED, pure_state=False, random=random)
-  environment_kwargs = environment_kwargs or {}
+  environment_kwargs = {}
   return control.Environment(
       physics, task, time_limit=time_limit, control_timestep=_CONTROL_TIMESTEP,
       **environment_kwargs)

@@ -221,11 +221,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
-
-    with open('/home/ubuntu/pywork/Plasticine/plasticine/standard/frictions', 'rb+') as f:
+    current_file_path = os.path.abspath(__file__)
+    current_directory = os.path.dirname(current_file_path)
+    with open(current_directory+'/frictions', 'rb+') as f:
             frictions = pickle.load(f)
     friction_number = 0
     
+    from dm_control import suite
     xml_path = os.path.join(os.path.dirname(suite.__file__), 'humanoid.xml')
     # env setup
     envs = gym.vector.SyncVectorEnv(
@@ -312,7 +314,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name, xml_path=xml_path) for i in range(args.num_envs)]
     )
             
-            breakpoint()
         
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
