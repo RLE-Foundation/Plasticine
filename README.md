@@ -84,7 +84,7 @@ sh scripts/std_ppo_craftax.sh
 | [TRAC](https://arxiv.org/pdf/2405.16642)          | [PPO+Procgen](./plasticine/standard/ppo_procgen_trac.py),[PQN+Atari](./plasticine/standard/pqn_atari_trac.py),[TD3+DMC](./plasticine/standard/td3_dmc_trac.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_trac.py),[TD3+DMC](./plasticine/continual/td3_dmc_trac.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_trac.py) |
 
 ### Evalution Metrics
-- **Ratio of Dormant Units** $s_i^{\ell}=\frac{\mathbb{E}_{x \in D}\left|h_i^{\ell}(x)\right|}{\frac{1}{H^{\ell}} \sum_{k \in h} \mathbb{E}_{x \in D}\left|h_k^{\ell}(x)\right|}$
+- **Ratio of Dormant Units** $s_i^{\ell} = \frac{\mathbb{E} \left| h_i^{\ell}(x) \right|}{\frac{1}{H^{\ell}} \sum_{k \in h} \mathbb{E} \left| h_k^{\ell}(x) \right|}$
 - **Fraction of Inactive Units** $\Phi_{\mathcal{M}}=\frac{\sum_{n \in \mathcal{M}} \mathbf{1}\left(a_n(x)>0\right)}{N}$
 - **Stable Rank**
 - **Effective Rank** $\rho(A)=-\sum_{i=1}^{\min (n, m)} \bar{\sigma}_i \log \left(\bar{\sigma}_i\right)$
@@ -106,8 +106,7 @@ sh scripts/std_ppo_craftax.sh
 |        Gradient Norm       |            |
 |        Feature Norm        |            |
 |      Feature Variance      |            |
-|       Policy Entropy       |            | -->
-
+|       Policy Entropy       |            |  -->
 
 ## Dataset
 ## Discussion and Contribution
