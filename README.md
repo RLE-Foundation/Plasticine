@@ -99,7 +99,7 @@ nn.Linear(512*2, 512),
 |                            |     **Metric**    |                  |
 |:--------------------------:|:-----------------:|------------------|
 |   Ratio of Dormant Units   |   Effective Rank  |   Gradient Norm  |
-| Fraction of Inactive Units |  Weight Magnitude |   Feature Norm   |
+| Fraction of Active Units |  Weight Magnitude |   Feature Norm   |
 |         Stable Rank        | Weight Difference | Feature Variance |
 |       Policy Entropy       |                   |                  |
 
