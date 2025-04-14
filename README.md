@@ -96,18 +96,12 @@ nn.Linear(512*2, 512),
 | [TRAC](https://arxiv.org/pdf/2405.16642)          | [PPO+Procgen](./plasticine/standard/ppo_procgen_trac.py),[PQN+Atari](./plasticine/standard/pqn_atari_trac.py),[TD3+DMC](./plasticine/standard/td3_dmc_trac.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_trac.py),[TD3+DMC](./plasticine/continual/td3_dmc_trac.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_trac.py) |
 
 ### Evaluation Metrics
-|         **Metric**         |
-|:--------------------------:|
-|   Ratio of Dormant Units   |
-| Fraction of Inactive Units |
-|         Stable Rank        |
-|       Effective Rank       |
-|      Weight Magnitude      |
-|      Weight Difference     |
-|        Gradient Norm       |
-|        Feature Norm        |
-|      Feature Variance      |
-|       Policy Entropy       |
+|                            |     **Metric**    |                  |
+|:--------------------------:|:-----------------:|------------------|
+|   Ratio of Dormant Units   |   Effective Rank  |   Gradient Norm  |
+| Fraction of Inactive Units |  Weight Magnitude |   Feature Norm   |
+|         Stable Rank        | Weight Difference | Feature Variance |
+|       Policy Entropy       |                   |                  |
 
 The detailed formulation of these metrics can be found in the [Paper]().
 
