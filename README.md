@@ -57,35 +57,35 @@ nn.Linear(512*2, 512),
 ### Reset-based Interventions
 | **Algorithm** | **Standard** | **Continual** | **Open-ended**|
 |:--|:--|:--|:--|
-| Shrink and Perturb          | [PPO+Procgen](./plasticine/standard/ppo_procgen_snp.py),[PQN+Atari](./plasticine/standard/pqn_atari_snp.py),[TD3+DMC](./plasticine/standard/td3_dmc_snp.py)          | [PPO+Procgen](./plasticine/continual/ppo_procgen_snp.py),[TD3+DMC](./plasticine/continual/td3_dmc_snp.py)         | [PPO+Craftax](./plasticine/open/ppo_craftax_snp.py)     |
-| Plasticity Injection        | [PPO+Procgen](./plasticine/standard/ppo_procgen_pi.py),[PQN+Atari](./plasticine/standard/pqn_atari_pi.py),[TD3+DMC](./plasticine/standard/td3_dmc_pi.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_pi.py),[TD3+DMC](./plasticine/continual/td3_dmc_pi.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_pi.py)      |
-| ReDo                        | [PPO+Procgen](./plasticine/standard/ppo_procgen_redo.py),[PQN+Atari](./plasticine/standard/pqn_atari_redo.py),[TD3+DMC](./plasticine/standard/td3_dmc_redo.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_redo.py),[TD3+DMC](./plasticine/continual/td3_dmc_redo.py)       | [PPO+Craftax](./plasticine/open/ppo_craftax_redo.py)    |
-| Resetting Layer             | [PPO+Procgen](./plasticine/standard/ppo_procgen_rl.py),[PQN+Atari](./plasticine/standard/pqn_atari_rl.py),[TD3+DMC](./plasticine/standard/td3_dmc_rl.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_rl.py),[TD3+DMC](./plasticine/continual/td3_dmc_rl.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_rl.py)      |
+| [Shrink and Perturb](https://arxiv.org/pdf/1910.08475)          | [PPO+Procgen](./plasticine/standard/ppo_procgen_snp.py),[PQN+Atari](./plasticine/standard/pqn_atari_snp.py),[TD3+DMC](./plasticine/standard/td3_dmc_snp.py)          | [PPO+Procgen](./plasticine/continual/ppo_procgen_snp.py),[TD3+DMC](./plasticine/continual/td3_dmc_snp.py)         | [PPO+Craftax](./plasticine/open/ppo_craftax_snp.py)     |
+| [Plasticity Injection](https://arxiv.org/pdf/2305.15555)        | [PPO+Procgen](./plasticine/standard/ppo_procgen_pi.py),[PQN+Atari](./plasticine/standard/pqn_atari_pi.py),[TD3+DMC](./plasticine/standard/td3_dmc_pi.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_pi.py),[TD3+DMC](./plasticine/continual/td3_dmc_pi.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_pi.py)      |
+| [ReDo](https://arxiv.org/pdf/2302.12902)                        | [PPO+Procgen](./plasticine/standard/ppo_procgen_redo.py),[PQN+Atari](./plasticine/standard/pqn_atari_redo.py),[TD3+DMC](./plasticine/standard/td3_dmc_redo.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_redo.py),[TD3+DMC](./plasticine/continual/td3_dmc_redo.py)       | [PPO+Craftax](./plasticine/open/ppo_craftax_redo.py)    |
+| [Resetting Layer](https://arxiv.org/pdf/2205.07802)             | [PPO+Procgen](./plasticine/standard/ppo_procgen_rl.py),[PQN+Atari](./plasticine/standard/pqn_atari_rl.py),[TD3+DMC](./plasticine/standard/td3_dmc_rl.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_rl.py),[TD3+DMC](./plasticine/continual/td3_dmc_rl.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_rl.py)      |
 
 
 ### Normlization
 
 | **Algorithm** | **Standard** | **Continual** | **Open-ended**|
 |:--|:--|:--|:--|
-| Layer Normalization         | [PPO+Procgen](./plasticine/standard/ppo_procgen_ln.py),[PQN+Atari](./plasticine/standard/pqn_atari_ln.py),[TD3+DMC](./plasticine/standard/td3_dmc_ln.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_ln.py),[TD3+DMC](./plasticine/continual/td3_dmc_ln.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_ln.py)      |
-| Normalize-and-Project       | [PPO+Procgen](./plasticine/standard/ppo_procgen_nap.py),[PQN+Atari](./plasticine/standard/pqn_atari_nap.py),[TD3+DMC](./plasticine/standard/td3_dmc_nap.py)          | [PPO+Procgen](./plasticine/continual/ppo_procgen_nap.py),[TD3+DMC](./plasticine/continual/td3_dmc_nap.py)         | [PPO+Craftax](./plasticine/open/ppo_craftax_nap.py)     |
+| [Layer Normalization](https://arxiv.org/pdf/2402.18762v1)         | [PPO+Procgen](./plasticine/standard/ppo_procgen_ln.py),[PQN+Atari](./plasticine/standard/pqn_atari_ln.py),[TD3+DMC](./plasticine/standard/td3_dmc_ln.py)             | [PPO+Procgen](./plasticine/continual/ppo_procgen_ln.py),[TD3+DMC](./plasticine/continual/td3_dmc_ln.py)           | [PPO+Craftax](./plasticine/open/ppo_craftax_ln.py)      |
+| [Normalize-and-Project](https://arxiv.org/pdf/2407.01800)       | [PPO+Procgen](./plasticine/standard/ppo_procgen_nap.py),[PQN+Atari](./plasticine/standard/pqn_atari_nap.py),[TD3+DMC](./plasticine/standard/td3_dmc_nap.py)          | [PPO+Procgen](./plasticine/continual/ppo_procgen_nap.py),[TD3+DMC](./plasticine/continual/td3_dmc_nap.py)         | [PPO+Craftax](./plasticine/open/ppo_craftax_nap.py)     |
 
 
 ### Regularization
 
 | **Algorithm** | **Standard** | **Continual** | **Open-ended**|
 |:--|:--|:--|:--|
-| L2 Normalization            | [PPO+Procgen](./plasticine/standard/ppo_procgen_l2n.py),[PQN+Atari](./plasticine/standard/pqn_atari_l2n.py),[TD3+DMC](./plasticine/standard/td3_dmc_l2n.py)    | [PPO+Procgen](./plasticine/continual/ppo_procgen_l2n.py),[TD3+DMC](./plasticine/continual/td3_dmc_l2n.py)   | [PPO+Craftax](./plasticine/open/ppo_craftax_l2n.py)  |
-| Regenerative Regularization | [PPO+Procgen](./plasticine/standard/ppo_procgen_rr.py),[PQN+Atari](./plasticine/standard/pqn_atari_rr.py),[TD3+DMC](./plasticine/standard/td3_dmc_rr.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_rr.py),[TD3+DMC](./plasticine/continual/td3_dmc_rr.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_rr.py)   |
-| Parseval Regularization     | [PPO+Procgen](./plasticine/standard/ppo_procgen_pr.py),[PQN+Atari](./plasticine/standard/pqn_atari_pr.py),[TD3+DMC](./plasticine/standard/td3_dmc_pr.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_pr.py),[TD3+DMC](./plasticine/continual/td3_dmc_pr.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_pr.py)   |
+| [L2 Normalization](https://arxiv.org/pdf/2402.18762)            | [PPO+Procgen](./plasticine/standard/ppo_procgen_l2n.py),[PQN+Atari](./plasticine/standard/pqn_atari_l2n.py),[TD3+DMC](./plasticine/standard/td3_dmc_l2n.py)    | [PPO+Procgen](./plasticine/continual/ppo_procgen_l2n.py),[TD3+DMC](./plasticine/continual/td3_dmc_l2n.py)   | [PPO+Craftax](./plasticine/open/ppo_craftax_l2n.py)  |
+| [Regenerative Regularization](https://arxiv.org/pdf/2308.11958) | [PPO+Procgen](./plasticine/standard/ppo_procgen_rr.py),[PQN+Atari](./plasticine/standard/pqn_atari_rr.py),[TD3+DMC](./plasticine/standard/td3_dmc_rr.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_rr.py),[TD3+DMC](./plasticine/continual/td3_dmc_rr.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_rr.py)   |
+| [Parseval Regularization](https://arxiv.org/pdf/2412.07224)     | [PPO+Procgen](./plasticine/standard/ppo_procgen_pr.py),[PQN+Atari](./plasticine/standard/pqn_atari_pr.py),[TD3+DMC](./plasticine/standard/td3_dmc_pr.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_pr.py),[TD3+DMC](./plasticine/continual/td3_dmc_pr.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_pr.py)   |
 
 
 ### Activation
 
 | **Algorithm** | **Standard** | **Continual** | **Open-ended**|
 |:--|:--|:--|:--|
-| CReLU Activation      | [PPO+Procgen](./plasticine/standard/ppo_procgen_ca.py),[PQN+Atari](./plasticine/standard/pqn_atari_ca.py),[TD3+DMC](./plasticine/standard/td3_dmc_ca.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_ca.py),[TD3+DMC](./plasticine/continual/td3_dmc_ca.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_ca.py)   |
-| Deep Fourier Features | [PPO+Procgen](./plasticine/standard/ppo_procgen_dff.py),[PQN+Atari](./plasticine/standard/pqn_atari_dff.py),[TD3+DMC](./plasticine/standard/td3_dmc_dff.py)    | [PPO+Procgen](./plasticine/continual/ppo_procgen_dff.py),[TD3+DMC](./plasticine/continual/td3_dmc_dff.py)   | [PPO+Craftax](./plasticine/open/ppo_craftax_dff.py)  |
+| [CReLU Activation](https://arxiv.org/pdf/2303.07507)      | [PPO+Procgen](./plasticine/standard/ppo_procgen_ca.py),[PQN+Atari](./plasticine/standard/pqn_atari_ca.py),[TD3+DMC](./plasticine/standard/td3_dmc_ca.py)       | [PPO+Procgen](./plasticine/continual/ppo_procgen_ca.py),[TD3+DMC](./plasticine/continual/td3_dmc_ca.py)     | [PPO+Craftax](./plasticine/open/ppo_craftax_ca.py)   |
+| [Deep Fourier Features](https://arxiv.org/pdf/2410.20634) | [PPO+Procgen](./plasticine/standard/ppo_procgen_dff.py),[PQN+Atari](./plasticine/standard/pqn_atari_dff.py),[TD3+DMC](./plasticine/standard/td3_dmc_dff.py)    | [PPO+Procgen](./plasticine/continual/ppo_procgen_dff.py),[TD3+DMC](./plasticine/continual/td3_dmc_dff.py)   | [PPO+Craftax](./plasticine/open/ppo_craftax_dff.py)  |
 
 
 ### Optimizer
@@ -93,25 +93,34 @@ nn.Linear(512*2, 512),
 
 | **Algorithm** | **Standard** | **Continual** | **Open-ended**|
 |:--|:--|:--|:--|
-| TRAC          | [PPO+Procgen](./plasticine/standard/ppo_procgen_trac.py),[PQN+Atari](./plasticine/standard/pqn_atari_trac.py),[TD3+DMC](./plasticine/standard/td3_dmc_trac.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_trac.py),[TD3+DMC](./plasticine/continual/td3_dmc_trac.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_trac.py) |
+| [TRAC](https://arxiv.org/pdf/2405.16642)          | [PPO+Procgen](./plasticine/standard/ppo_procgen_trac.py),[PQN+Atari](./plasticine/standard/pqn_atari_trac.py),[TD3+DMC](./plasticine/standard/td3_dmc_trac.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_trac.py),[TD3+DMC](./plasticine/continual/td3_dmc_trac.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_trac.py) |
 
-### Evalution Metrics
+### Evaluation Metrics
+- **Ratio of Dormant Units** $s_i^{\ell} = \frac{\mathbb{E} \left| h_i^{\ell}(x) \right|}{\frac{1}{H^{\ell}} \sum_{k \in h} \mathbb{E} \left| h_k^{\ell}(x) \right|}$
+- **Fraction of Inactive Units** $\Phi_{\mathcal{M}}=\frac{\sum_{n \in \mathcal{M}} \mathbf{1}\left(a_n(x)>0\right)}{N}$
+- **Stable Rank**
+- **Effective Rank** $\rho(A)=-\sum_{i=1}^{\min (n, m)} \bar{\sigma}_i \log \left(\bar{\sigma}_i\right)$
+- **Weight Magnitude**
+- **Weight Difference**
+- **Gradient Norm**
+- **Feature Norm**
+- **Feature Variance**
+- **Policy Entropy**
 
-|         **Metric**         | **Remark** |
+
+<!-- |         **Metric**         | **Remark** |
 |:--------------------------:|:----------:|
-|   Ratio of Dormant Units   |            |
-| Fraction of Inactive Units |            |
-|         Stable Rank        |            |
+|   Ratio of Dormant Units   |    |
+|         Stable Rank        | |
 |       Effective Rank       |            |
 |      Weight Magnitude      |            |
 |      Weight Difference     |            |
 |        Gradient Norm       |            |
 |        Feature Norm        |            |
 |      Feature Variance      |            |
-|       Policy Entropy       |            |
+|       Policy Entropy       |            |  -->
 
 ## Dataset
-
 ## Discussion and Contribution
 
 - For discussion and questions:

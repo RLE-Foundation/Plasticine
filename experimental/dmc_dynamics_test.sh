@@ -8,7 +8,8 @@
 
 export PYTHONPATH="${PYTHONPATH}:./plasticine"
 
-CUDA_VISIBLE_DEVICES=6 && python plasticine/standard/td3_dmc_vanilla_multi.py \
+CUDA_VISIBLE_DEVICES=1 && python plasticine/standard/td3_dmc_vanilla_dynamics.py \
 --track \
---total_timesteps 100000 \
---env_ids "humanoid_stand" "humanoid_walk" "humanoid_run" 
+--total_timesteps 10000 \
+--change_time 1000 \
+--env_id "humanoid_run"  

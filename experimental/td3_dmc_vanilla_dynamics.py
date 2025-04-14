@@ -2,27 +2,23 @@
 import os
 import random
 import time
-from dataclasses import dataclass,field
-import glob
+from dataclasses import dataclass
 
 import gymnasium as gym
-# import gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import tyro
-import dmc2gym
-
-import wrappers
-
-os.environ['MUJOCO_GL'] = 'egl'
-
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
+import dmc_wrappers
+import pickle
+
 from plasticine.metrics import (compute_dormant_units, 
+                                compute_active_units,
                                 compute_stable_rank, 
                                 compute_effective_rank, 
                                 compute_feature_norm, 
@@ -39,6 +35,8 @@ class Args:
     seed: int = 1
     """seed of the experiment"""
     torch_deterministic: bool = True
+    """change time of the friction"""
+    change_time: int = 20000
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
@@ -60,8 +58,6 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
     """the id of the environment"""
-    env_ids: list = field(default_factory=list)
-    """the id of the environments"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
@@ -93,26 +89,19 @@ class Args:
     """the size of the evaluation data for the plasticity metrics"""
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+def make_env(env_id, seed, idx, capture_video, run_name, xml_path):
     def thunk():
-        if "_" in env_id:
-            domain_name, task_name = env_id.split("_")
-            env = wrappers.DeepMindControl(
-                env_id=env_id
-            )
-        else:
-            # 普通Gymnasium环境
-            env = gym.make(env_id)
-            env = gym.wrappers.RecordEpisodeStatistics(env)
-            env.action_space.seed(seed)
-            env.observation_space.seed(seed)
+        env = dmc_wrappers.DeepMindControl(
+            env_id=env_id,
+            environment_kwargs={'xml_path':xml_path}
+        )
 
         if capture_video and idx == 0:
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-        
         return env
 
     return thunk
+
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
@@ -197,222 +186,238 @@ if __name__ == "__main__":
     import stable_baselines3 as sb3
 
     if sb3.__version__ < "2.0":
-         raise ValueError(
+        raise ValueError(
             """Ongoing migration: run the following command to install the new dependencies:
 poetry run pip install "stable_baselines3==2.0.0a1"
 """
         )
-    args = tyro.cli(Args)
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     
-    actor = None
-    qf1 = None
-    qf2 = None
-    target_actor = None
-    qf1_target = None
-    qf2_target = None
-    q_optimizer = None
-    actor_optimizer = None
+    args = tyro.cli(Args)
+    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    if args.track:
+        import wandb
 
-    global_timestamp = int(time.time())
-   
-    for env_id in args.env_ids:
-        # run_name = f"{env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-        log_dir = 'std_td3_mujoco_vanilla_runs'
-        parent_dir = f"{log_dir}/{args.exp_name}_{args.seed}_{global_timestamp}"
-        run_name = parent_dir
-        if args.track:
-            import wandb
-            wandb.tensorboard.unpatch()
-            wandb.tensorboard.patch(root_logdir=parent_dir)
-            wandb.init(
-                project=args.wandb_project_name,
-                entity=args.wandb_entity,
-                sync_tensorboard=True,
-                config=vars(args),
-                name=run_name,
-                monitor_gym=True,
-                save_code=True,
-            )
+        wandb.init(
+            project=args.wandb_project_name,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=True,
+            save_code=True,
+        )
+    log_dir = 'std_td3_dmc_vanilla_runs'
+    writer = SummaryWriter(f"{log_dir}/{run_name}")
+    writer.add_text(
+        "hyperparameters",
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    )
+
+    # TRY NOT TO MODIFY: seeding
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = args.torch_deterministic
+
+    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+
+    current_file_path = os.path.abspath(__file__)
+    current_directory = os.path.dirname(current_file_path)
+    with open(current_directory+'/frictions', 'rb+') as f:
+            frictions = pickle.load(f)
+    friction_number = 0
+    
+    from dm_control import suite
+    xml_path = os.path.join(os.path.dirname(suite.__file__), 'humanoid.xml')
+    # env setup
+    envs = gym.vector.SyncVectorEnv(
+        [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name, xml_path=xml_path) for i in range(args.num_envs)]
+    )
+    assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+
+    actor = Actor(envs).to(device)
+    qf1 = QNetwork(envs).to(device)
+    qf2 = QNetwork(envs).to(device)
+    qf1_target = QNetwork(envs).to(device)
+    qf2_target = QNetwork(envs).to(device)
+    target_actor = Actor(envs).to(device)
+    target_actor.load_state_dict(actor.state_dict())
+    qf1_target.load_state_dict(qf1.state_dict())
+    qf2_target.load_state_dict(qf2.state_dict())
+    q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
+    actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
+
+    # save the initial state of the model
+    actor_copy = save_model_state(actor)
+    qf1_copy = save_model_state(qf1)
+
+    envs.single_observation_space.dtype = np.float32
+    rb = ReplayBuffer(
+        args.buffer_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device,
+        n_envs=args.num_envs,
+        handle_timeout_termination=False,
+    )
+    start_time = time.time()
+
+    # TRY NOT TO MODIFY: start the game
+    obs, _ = envs.reset(seed=args.seed)
+    for global_step in range(args.total_timesteps):
+        # ALGO LOGIC: put action logic here
+        if global_step < args.learning_starts:
+            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+        else:
+            with torch.no_grad():
+                actions = actor(torch.Tensor(obs).to(device))
+                actions += torch.normal(0, actor.action_scale * args.exploration_noise)
+                actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
+
+        # TRY NOT TO MODIFY: execute the game and log data.
+        next_obs, rewards, terminations, truncations, infos = envs.step(actions)
         
-        env_subdir = f"{parent_dir}/{env_id}"
-        # os.makedirs(env_subdir, exist_ok=True)
-        writer = SummaryWriter(f"{env_subdir}")
-        writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-        )
+        # if terminations
 
-        # TRY NOT TO MODIFY: seeding
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        torch.backends.cudnn.deterministic = args.torch_deterministic
+        # TRY NOT TO MODIFY: record rewards for plotting purposes
+        if "final_info" in infos:
+            for info in infos["final_info"]:
+                if info is not None:
+                    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
+                    writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
+                    writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+                    break
 
-        # env setup
-        envs = gym.vector.SyncVectorEnv(
-            [make_env(env_id, args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
-        )
-        assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+        # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+        real_next_obs = next_obs.copy()
+        for idx, trunc in enumerate(truncations):
+            if trunc:
+                real_next_obs[idx] = infos["final_observation"][idx]
+        rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
 
-        if actor is None:  
-            actor = Actor(envs).to(device)
-            qf1 = QNetwork(envs).to(device)
-            qf2 = QNetwork(envs).to(device)
-            qf1_target = QNetwork(envs).to(device)
-            qf2_target = QNetwork(envs).to(device)
-            target_actor = Actor(envs).to(device)
-            target_actor.load_state_dict(actor.state_dict())
-            qf1_target.load_state_dict(qf1.state_dict())
-            qf2_target.load_state_dict(qf2.state_dict())
-            q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
-            actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
-        else:  
-            history_runs = [d for d in glob.glob(f"{parent_dir}/*") if os.path.isdir(d)]
-           
-            if history_runs:
-                latest_run = max(history_runs, key=os.path.getctime)
-                source_agent = f"{latest_run}/{env_id}/agent.pth"
-            if os.path.exists(source_agent):
-                print(f"Loading {env_id} model from {latest_run}")
-                actor.load_state_dict(torch.load(f"{log_dir}/{latest_run}/{env_id}/agent.pth"))
-                qf1.load_state_dict(torch.load(f"{log_dir}/{latest_run}/{env_id}/qf1.pth"))
-                qf2.load_state_dict(torch.load(f"{log_dir}/{latest_run}/{env_id}/qf2.pth"))
-                target_actor.load_state_dict(actor.state_dict())
-                qf1_target.load_state_dict(qf1.state_dict())
-                qf2_target.load_state_dict(qf2.state_dict())
+        # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
+        obs = next_obs
+
+        if global_step % args.change_time == 0 and global_step != 0:
+            envs.close()
+            friction_number += 1
+            new_friction = frictions[args.seed][friction_number]
+            old_file = os.path.join(os.path.dirname(suite.__file__), 'humanoid.xml')
+            import xml.etree.ElementTree as ET
+            tree = ET.parse(old_file)
+            root = tree.getroot()
+            root[5][1][0].attrib['friction'] = str(new_friction)
+            current_working_directory = os.getcwd()
+            tree.write('humanoid.xml')
+            xml_path = current_working_directory + '/humanoid.xml'
+            envs = gym.vector.SyncVectorEnv(
+        [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name, xml_path=xml_path) for i in range(args.num_envs)]
+    )
             
+        
+        # ALGO LOGIC: training.
+        if global_step > args.learning_starts:
+            data = rb.sample(args.batch_size)
+            with torch.no_grad():
+                clipped_noise = (torch.randn_like(data.actions, device=device) * args.policy_noise).clamp(
+                    -args.noise_clip, args.noise_clip
+                ) * target_actor.action_scale
 
-        # save the initial state of the model
-        actor_copy = save_model_state(actor)
-        qf1_copy = save_model_state(qf1)
+                next_state_actions = (target_actor(data.next_observations) + clipped_noise).clamp(
+                    envs.single_action_space.low[0], envs.single_action_space.high[0]
+                )
+                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+                qf2_next_target = qf2_target(data.next_observations, next_state_actions)
+                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target)
+                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
 
-        envs.single_observation_space.dtype = np.float32
-        rb = ReplayBuffer(
-            args.buffer_size,
-            envs.single_observation_space,
-            envs.single_action_space,
-            device,
-            n_envs=args.num_envs,
-            handle_timeout_termination=False,
-        )
+            qf1_a_values = qf1(data.observations, data.actions).view(-1)
+            qf2_a_values = qf2(data.observations, data.actions).view(-1)
+            qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+            qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+            qf_loss = qf1_loss + qf2_loss
 
-        start_time = time.time()
-        obs, _ = envs.reset(seed=args.seed)
+            # optimize the model
+            q_optimizer.zero_grad()
+            qf_loss.backward()
+            q_optimizer.step()
 
-        for global_step in range(args.total_timesteps):
-            # ALGO LOGIC: put action logic here
-            if global_step < args.learning_starts:
-                actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
-            else:
-                with torch.no_grad():
-                    actions = actor(torch.Tensor(obs).to(device))
-                    actions += torch.normal(0, actor.action_scale * args.exploration_noise)
-                    actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
+            # get the qf gradient norm but don't clip it
+            qf_grad_norm = torch.nn.utils.clip_grad_norm_(qf1.parameters(), 1e10)
+            writer.add_scalar("plasticity/value_grad_norm", qf_grad_norm.item(), global_step)
 
-            # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, rewards, terminations, truncations, infos = envs.step(actions)
+            if global_step % args.policy_frequency == 0:
+                actor_loss = -qf1(data.observations, actor(data.observations)).mean()
+                actor_optimizer.zero_grad()
+                actor_loss.backward()
+                actor_optimizer.step()
 
-            # TRY NOT TO MODIFY: record rewards for plotting purposes
-            if "final_info" in infos:
-                for info in infos["final_info"]:
-                    if info is not None:
-                        print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                        writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                        writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
-                        break
+                # get the actor gradient norm but don't clip it
+                actor_grad_norm = torch.nn.utils.clip_grad_norm_(actor.parameters(), 1e10)
+                writer.add_scalar("plasticity/policy_grad_norm", actor_grad_norm.item(), global_step)
 
-            # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
-            real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos["final_observation"][idx]
-            rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
+                # update the target network
+                for param, target_param in zip(actor.parameters(), target_actor.parameters()):
+                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
+                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
+                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
-            obs = next_obs
+            # evaluate the plasticity metrics
+            if global_step % args.plasticity_eval_interval == 0:
+                eval_data = rb.sample(args.plasticity_eval_size)
 
-            # ALGO LOGIC: training.
-           
-            if global_step > args.learning_starts:
-                data = rb.sample(args.batch_size)
-                with torch.no_grad():
-                    clipped_noise = (torch.randn_like(data.actions, device=device) * args.policy_noise).clamp(
-                        -args.noise_clip, args.noise_clip
-                    ) * target_actor.action_scale
-                    next_state_actions = (target_actor(data.next_observations) + clipped_noise).clamp(
-                        envs.single_action_space.low[0], envs.single_action_space.high[0]
-                    )
-                    qf1_next_target = qf1_target(data.next_observations, next_state_actions)
-                    qf2_next_target = qf2_target(data.next_observations, next_state_actions)
-                    min_qf_next_target = torch.min(qf1_next_target, qf2_next_target)
-                    next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
+                policy_hidden = actor.get_features(eval_data.observations)
+                value_hidden = qf1.get_features(eval_data.observations, eval_data.actions)
 
-                qf1_a_values = qf1(data.observations, data.actions).view(-1)
-                qf2_a_values = qf2(data.observations, data.actions).view(-1)
-                qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
-                qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
-                qf_loss = qf1_loss + qf2_loss
+                policy_dormant_units = compute_dormant_units(actor.policy_encoder, eval_data.observations, 'relu', tau=0.025)
+                value_dormant_units = compute_dormant_units(qf1.value_encoder, torch.cat([eval_data.observations, eval_data.actions], dim=1), 'relu', tau=0.025)
+                policy_active_units, value_active_units = compute_active_units(policy_hidden, 'relu'), compute_active_units(policy_hidden, 'relu')
+                policy_stable_rank, value_stable_rank = compute_stable_rank(policy_hidden), compute_stable_rank(policy_hidden)
+                policy_effective_rank, value_effective_rank = compute_effective_rank(policy_hidden), compute_effective_rank(policy_hidden)
+                policy_feature_norm, value_feature_norm = compute_feature_norm(policy_hidden), compute_feature_norm(policy_hidden)
+                policy_feature_var, value_feature_var = compute_feature_variance(policy_hidden), compute_feature_variance(policy_hidden)
 
-                # optimize the model
-                q_optimizer.zero_grad()
-                qf_loss.backward()
-                q_optimizer.step()
+                # overall metrics
+                weight_magnitude = compute_weight_magnitude(actor) + compute_weight_magnitude(qf1)
+                diff_l2_norm = compute_l2_norm_difference(actor, actor_copy) + compute_l2_norm_difference(qf1, qf1_copy)
 
-                if global_step % args.policy_frequency == 0:
-                    actor_loss = -qf1(data.observations, actor(data.observations)).mean()
-                    actor_optimizer.zero_grad()
-                    actor_loss.backward()
-                    actor_optimizer.step()
+                # log the metrics
+                writer.add_scalar("plasticity/policy_active_units", policy_active_units.item(), global_step)
+                writer.add_scalar("plasticity/policy_dormant_units", policy_dormant_units.item(), global_step)
+                writer.add_scalar("plasticity/policy_stable_rank", policy_stable_rank.item(), global_step)
+                writer.add_scalar("plasticity/policy_effective_rank", policy_stable_rank.item(), global_step)
+                writer.add_scalar("plasticity/policy_feature_norm", policy_feature_norm.item(), global_step)
+                writer.add_scalar("plasticity/policy_feature_variance", policy_feature_var.item(), global_step)
+                
+                writer.add_scalar("plasticity/value_active_units", value_active_units.item(), global_step)
+                writer.add_scalar("plasticity/value_dormant_units", value_dormant_units.item(), global_step)
+                writer.add_scalar("plasticity/value_stable_rank", value_stable_rank.item(), global_step)
+                writer.add_scalar("plasticity/value_effective_rank", value_effective_rank.item(), global_step)
+                writer.add_scalar("plasticity/value_feature_norm", value_feature_norm.item(), global_step)
+                writer.add_scalar("plasticity/value_feature_variance", value_feature_var.item(), global_step)
 
-                    # update the target network
-                    for param, target_param in zip(actor.parameters(), target_actor.parameters()):
-                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                    for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                    for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
-                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)
+                writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
 
-                # evaluate the plasticity metrics
-                if global_step % args.plasticity_eval_interval == 0:
-                    eval_data = rb.sample(args.plasticity_eval_size)
-                    policy_hidden = actor.get_features(eval_data.observations)
-                    value_hidden = qf1.get_features(eval_data.observations, eval_data.actions)
-                    hidden = torch.hstack([policy_hidden, value_hidden])
-                    dormant_units = compute_dormant_units(hidden, 'relu')
-                    stable_rank = compute_stable_rank(hidden)
-                    effective_rank = compute_effective_rank(hidden)
-                    feature_norm = compute_feature_norm(hidden)
-                    feature_var = compute_feature_variance(hidden)
-                    weight_magnitude = compute_weight_magnitude(actor) + compute_weight_magnitude(qf1)
-                    diff_l2_norm = compute_l2_norm_difference(actor, actor_copy) + compute_l2_norm_difference(qf1, qf1_copy)
-                    feature_norm = compute_feature_norm(hidden)
-                    feature_var = compute_feature_variance(hidden)
-                    writer.add_scalar("plasticity/dormant_units", dormant_units.item(), global_step)
-                    writer.add_scalar("plasticity/stable_rank", stable_rank.item(), global_step)
-                    writer.add_scalar("plasticity/effective_rank", effective_rank.item(), global_step)
-                    writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)
-                    writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
-                    writer.add_scalar("plasticity/feature_norm", feature_norm.item(), global_step)
-                    writer.add_scalar("plasticity/feature_variance", feature_var.item(), global_step)
 
-                if global_step % 100 == 0:
-                    writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
-                    writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
-                    writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
-                    writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
-                    writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
-                    writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                    print("SPS:", int(global_step / (time.time() - start_time)))
-                    writer.add_scalar(
-                        "charts/SPS", int(global_step / (time.time() - start_time)), global_step,
-                    )
+            if global_step % 100 == 0:
+                writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
+                writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
+                writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
+                writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
+                writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
+                writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
+                print("SPS:", int(global_step / (time.time() - start_time)))
+                writer.add_scalar(
+                    "charts/SPS",
+                    int(global_step / (time.time() - start_time)),
+                    global_step,
+                )
 
-        envs.close()
-        writer.close()
+    envs.close()
+    writer.close()
 
-        # save model
-       
-        torch.save(actor.state_dict(), f"{env_subdir}/agent.pth")
-        torch.save(qf1.state_dict(), f"{env_subdir}/qf1.pth")
-        torch.save(qf2.state_dict(), f"{env_subdir}/qf2.pth")
+    # save model
+    torch.save(actor.state_dict(), f"{log_dir}/{run_name}/agent.pth")
