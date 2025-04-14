@@ -15,6 +15,7 @@ from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
 from plasticine.metrics import (compute_dormant_units, 
+                                compute_active_units,
                                 compute_stable_rank, 
                                 compute_effective_rank, 
                                 compute_feature_norm, 
@@ -23,6 +24,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.procgen_wrappers import PlasticineProcgen
 
 @dataclass
 class Args:
@@ -44,24 +46,15 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "starpilot"
-    """the id of the environment"""
-    num_round_iterations: int = 5000
-    """the number of episodes of per round"""
-    total_rounds: int = 10
-    """the number of rounds to train on"""
-    min_levels: int = 0
-    """the minimum levels to train on"""
-    max_levels: int = 10
-    """the maximum levels to train on"""
-
-    # PPO specific arguments
-    """total timesteps of the experiments"""
+    # env_id: str = "starpilot"
+    # """the id of the environment"""
+    # total_timesteps: int = int(25e6)
+    # """total timesteps of the experiments"""
     learning_rate: float = 5e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 10
+    num_envs: int = 64
     """the number of parallel game environments"""
-    num_steps: int = 1000
+    num_steps: int = 256
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = False
     """Toggle learning rate annealing for policy and value networks"""
@@ -97,6 +90,18 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
 
+    """------------------------Plasticine------------------------"""
+    cont_mode: str = "level"
+    """the mode of the continual learning task, `level` or `task`"""
+    num_rounds: int = 10
+    """the number of rounds for the continual learning task"""
+    num_episodes_per_round: int = 100
+    """the number of episodes per round"""
+    level_offset: int = 5
+    """the level offset for the `level` mode"""
+    """------------------------Plasticine------------------------"""
+
+
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
@@ -107,16 +112,15 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
-        self.conv0 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
-        self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
-
+        self.block = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        )
+        
     def forward(self, x):
-        inputs = x
-        x = nn.functional.relu(x)
-        x = self.conv0(x)
-        x = nn.functional.relu(x)
-        x = self.conv1(x)
-        return x + inputs
+        return self.block(x) + x
 
 
 class ConvSequence(nn.Module):
@@ -185,13 +189,13 @@ class Agent(nn.Module):
 
         if check:
             with torch.no_grad():
-                dead_units = compute_dormant_units(hidden, 'relu')
+                active_units = compute_active_units(hidden, 'relu')
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
                 feature_norm = compute_feature_norm(hidden)
                 feature_var = compute_feature_variance(hidden)
                 plasticity_metrics = {
-                    "dormant_units": dead_units.item(),
+                    "active_units": active_units.item(),
                     "stable_rank": stable_rank.item(),
                     "effective_rank": effective_rank.item(),
                     "feature_norm": feature_norm.item(),
@@ -201,13 +205,18 @@ class Agent(nn.Module):
         else:
             return action, probs.log_prob(action), probs.entropy(), self.value(hidden)
 
+    def forward(self, x):
+        """for computing the RDU"""
+        return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.round_timesteps // args.batch_size
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    # args.num_iterations = args.total_timesteps // args.batch_size
+    args.num_iterations = args.num_rounds * args.num_episodes_per_round
+    run_name = f"{args.cont_mode}__{args.exp_name}__{args.seed}__{int(time.time())}"
+
     if args.track:
         import wandb
 
@@ -234,206 +243,215 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
-    
+
+    """------------------------Plasticine------------------------"""
+    # env setup
+    env_ids = ['starpilot']
+    envs = PlasticineProcgen(
+        env_ids=env_ids,
+        num_envs=args.num_envs,
+        mode=args.cont_mode,
+        level_offset=args.level_offset,
+        gamma=args.gamma,
+    )
+    # connect all the env_ids to a string
+    env_ids = '-'.join(env_ids)
+    writer.add_text("env_ids", env_ids)
+    """------------------------Plasticine------------------------"""
+
+    agent = Agent(envs).to(device)
+    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+
+    # ALGO Logic: Storage setup
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
+    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
+    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
+    next_obs = torch.Tensor(envs.reset()).to(device)
+    next_done = torch.zeros(args.num_envs).to(device)
 
-    for current_level in range(args.max_levels):
-        # env setup
-        envs = ProcgenEnv(num_envs=args.num_envs, 
-                          env_name=args.env_id, 
-                          num_levels=1, 
-                          start_level=current_level+args.seed, 
-                          distribution_mode="easy")
-        envs = gym.wrappers.TransformObservation(envs, lambda obs: obs["rgb"])
-        envs.single_action_space = envs.action_space
-        envs.single_observation_space = envs.observation_space["rgb"]
-        envs.is_vector_env = True
-        envs = gym.wrappers.RecordEpisodeStatistics(envs)
-        if args.capture_video:
-            envs = gym.wrappers.RecordVideo(envs, f"videos/{run_name}")
-        envs = gym.wrappers.NormalizeReward(envs, gamma=args.gamma)
-        envs = gym.wrappers.TransformReward(envs, lambda reward: np.clip(reward, -10, 10))
-        assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+    for iteration in range(1, args.num_iterations + 1):
+        """------------------------Plasticine------------------------"""
+        # shift the environment
+        if (iteration - 1) % args.num_episodes_per_round == 0:
+            # shift the environment
+            envs.shift()
+            # reset the environment
+            next_obs = torch.Tensor(envs.reset()).to(device)
+            next_done = torch.zeros(args.num_envs).to(device)
+            print(f"iteration: {iteration}, env_id: {envs.env_id}, current_level: {envs.current_level}")
+        """------------------------Plasticine------------------------"""
 
-        # build the agent
-        if current_level == 0:
-            # initialize the agent
-            agent = Agent(envs).to(device)
-            optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+        # Annealing the rate if instructed to do so.
+        if args.anneal_lr:
+            frac = 1.0 - (iteration - 1.0) / args.num_iterations
+            lrnow = frac * args.learning_rate
+            optimizer.param_groups[0]["lr"] = lrnow
 
-        # ALGO Logic: Storage setup
-        obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
-        actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
-        logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
-        rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
-        dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
-        values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        for step in range(0, args.num_steps):
+            global_step += args.num_envs
+            obs[step] = next_obs
+            dones[step] = next_done
 
-        next_obs = torch.Tensor(envs.reset()).to(device)
-        next_done = torch.zeros(args.num_envs).to(device)
-
-        for iteration in range(1, args.num_iterations + 1):
-            # Annealing the rate if instructed to do so.
-            if args.anneal_lr:
-                frac = 1.0 - (iteration - 1.0) / args.num_iterations
-                lrnow = frac * args.learning_rate
-                optimizer.param_groups[0]["lr"] = lrnow
-
-            for step in range(0, args.num_steps):
-                global_step += args.num_envs
-                obs[step] = next_obs
-                dones[step] = next_done
-
-                # ALGO LOGIC: action logic
-                with torch.no_grad():
-                    action, logprob, _, value = agent.get_action_and_value(next_obs)
-                    values[step] = value.flatten()
-                actions[step] = action
-                logprobs[step] = logprob
-
-                # TRY NOT TO MODIFY: execute the game and log data.
-                next_obs, reward, next_done, info = envs.step(action.cpu().numpy())
-                rewards[step] = torch.tensor(reward).to(device).view(-1)
-                next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
-
-                for item in info:
-                    if "episode" in item.keys():
-                        print(f"global_step={global_step}, episodic_return={item['episode']['r']}")
-                        writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
-                        writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
-                        break
-
-            # bootstrap value if not done
+            # ALGO LOGIC: action logic
             with torch.no_grad():
-                next_value = agent.get_value(next_obs).reshape(1, -1)
-                advantages = torch.zeros_like(rewards).to(device)
-                lastgaelam = 0
-                for t in reversed(range(args.num_steps)):
-                    if t == args.num_steps - 1:
-                        nextnonterminal = 1.0 - next_done
-                        nextvalues = next_value
-                    else:
-                        nextnonterminal = 1.0 - dones[t + 1]
-                        nextvalues = values[t + 1]
-                    delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
-                    advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
-                returns = advantages + values
+                action, logprob, _, value = agent.get_action_and_value(next_obs)
+                values[step] = value.flatten()
+            actions[step] = action
+            logprobs[step] = logprob
 
-            # flatten the batch
-            b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
-            b_logprobs = logprobs.reshape(-1)
-            b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
-            b_advantages = advantages.reshape(-1)
-            b_returns = returns.reshape(-1)
-            b_values = values.reshape(-1)
+            # TRY NOT TO MODIFY: execute the game and log data.
+            next_obs, reward, next_done, info = envs.step(action.cpu().numpy())
+            rewards[step] = torch.tensor(reward).to(device).view(-1)
+            next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
 
-            # Optimizing the policy and value network
-            b_inds = np.arange(args.batch_size)
-            clipfracs = []
-
-            # plasticity metrics
-            total_dormant_units = []
-            total_stable_rank = []
-            total_effective_rank = []
-            total_grad_norm = []
-            total_policy_ent = []
-            total_feature_norm = []
-            total_feature_var = []
-            # copy the agent
-            agent_copy = save_model_state(agent)
-
-            for epoch in range(args.update_epochs):
-                np.random.shuffle(b_inds)
-                for start in range(0, args.batch_size, args.minibatch_size):
-                    end = start + args.minibatch_size
-                    mb_inds = b_inds[start:end]
-
-                    _, newlogprob, entropy, newvalue, plasticity_metrics = agent.get_action_and_value(b_obs[mb_inds], b_actions.long()[mb_inds], check=True)
-                    logratio = newlogprob - b_logprobs[mb_inds]
-                    ratio = logratio.exp()
-
-                    with torch.no_grad():
-                        # calculate approx_kl http://joschu.net/blog/kl-approx.html
-                        old_approx_kl = (-logratio).mean()
-                        approx_kl = ((ratio - 1) - logratio).mean()
-                        clipfracs += [((ratio - 1.0).abs() > args.clip_coef).float().mean().item()]
-
-                    mb_advantages = b_advantages[mb_inds]
-                    if args.norm_adv:
-                        mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
-
-                    # Policy loss
-                    pg_loss1 = -mb_advantages * ratio
-                    pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)
-                    pg_loss = torch.max(pg_loss1, pg_loss2).mean()
-
-                    # Value loss
-                    newvalue = newvalue.view(-1)
-                    if args.clip_vloss:
-                        v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
-                        v_clipped = b_values[mb_inds] + torch.clamp(
-                            newvalue - b_values[mb_inds],
-                            -args.clip_coef,
-                            args.clip_coef,
-                        )
-                        v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
-                        v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                        v_loss = 0.5 * v_loss_max.mean()
-                    else:
-                        v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
-
-                    entropy_loss = entropy.mean()
-                    loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
-
-                    optimizer.zero_grad()
-                    loss.backward()
-                    batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
-                    optimizer.step()
-
-                    # log plasticity metrics
-                    total_dormant_units.append(plasticity_metrics["dormant_units"])
-                    total_stable_rank.append(plasticity_metrics["stable_rank"])
-                    total_effective_rank.append(plasticity_metrics["effective_rank"])
-                    total_feature_norm.append(plasticity_metrics["feature_norm"])
-                    total_feature_var.append(plasticity_metrics["feature_var"])
-                    total_grad_norm.append(batch_grad_norm.item())
-                    total_policy_ent.append(entropy_loss.item())
-
-                if args.target_kl is not None and approx_kl > args.target_kl:
+            for item in info:
+                if "episode" in item.keys():
+                    print(f"global_step={global_step}, episodic_return={item['episode']['r']}")
+                    writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
+                    writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
                     break
 
-            y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
-            var_y = np.var(y_true)
-            explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        # bootstrap value if not done
+        with torch.no_grad():
+            next_value = agent.get_value(next_obs).reshape(1, -1)
+            advantages = torch.zeros_like(rewards).to(device)
+            lastgaelam = 0
+            for t in reversed(range(args.num_steps)):
+                if t == args.num_steps - 1:
+                    nextnonterminal = 1.0 - next_done
+                    nextvalues = next_value
+                else:
+                    nextnonterminal = 1.0 - dones[t + 1]
+                    nextvalues = values[t + 1]
+                delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
+                advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
+            returns = advantages + values
 
-            # compute the l2 norm difference
-            diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
-            # compute weight magnitude
-            weight_magnitude = compute_weight_magnitude(agent)
+        # flatten the batch
+        b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
+        b_logprobs = logprobs.reshape(-1)
+        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
+        b_advantages = advantages.reshape(-1)
+        b_returns = returns.reshape(-1)
+        b_values = values.reshape(-1)
 
-            # TRY NOT TO MODIFY: record rewards for plotting purposes
-            writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
-            writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-            writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-            writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-            writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
-            writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-            writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-            writer.add_scalar("losses/explained_variance", explained_var, global_step)
-            # add plasticity metrics
-            writer.add_scalar("plasticity/dormant_units", np.mean(total_dormant_units), global_step)
-            writer.add_scalar("plasticity/stable_rank", np.mean(total_stable_rank), global_step)
-            writer.add_scalar("plasticity/effective_rank", np.mean(total_effective_rank), global_step)
-            writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)
-            writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
-            writer.add_scalar("plasticity/grad_norm", np.mean(total_grad_norm), global_step)
-            writer.add_scalar("plasticity/policy_entropy", np.mean(total_policy_ent), global_step)
-            writer.add_scalar("plasticity/feature_norm", np.mean(total_feature_norm), global_step)
-            writer.add_scalar("plasticity/feature_variance", np.mean(total_feature_var), global_step)
-            print("SPS:", int(global_step / (time.time() - start_time)))
-            writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        # Optimizing the policy and value network
+        b_inds = np.arange(args.batch_size)
+        clipfracs = []
+
+        # plasticity metrics
+        total_active_units = []
+        total_stable_rank = []
+        total_effective_rank = []
+        total_grad_norm = []
+        total_policy_ent = []
+        total_feature_norm = []
+        total_feature_var = []
+        # copy the agent
+        agent_copy = save_model_state(agent)
+
+        for epoch in range(args.update_epochs):
+            np.random.shuffle(b_inds)
+            for start in range(0, args.batch_size, args.minibatch_size):
+                end = start + args.minibatch_size
+                mb_inds = b_inds[start:end]
+
+                _, newlogprob, entropy, newvalue, plasticity_metrics = agent.get_action_and_value(b_obs[mb_inds], b_actions.long()[mb_inds], check=True)
+                logratio = newlogprob - b_logprobs[mb_inds]
+                ratio = logratio.exp()
+
+                with torch.no_grad():
+                    # calculate approx_kl http://joschu.net/blog/kl-approx.html
+                    old_approx_kl = (-logratio).mean()
+                    approx_kl = ((ratio - 1) - logratio).mean()
+                    clipfracs += [((ratio - 1.0).abs() > args.clip_coef).float().mean().item()]
+
+                mb_advantages = b_advantages[mb_inds]
+                if args.norm_adv:
+                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+
+                # Policy loss
+                pg_loss1 = -mb_advantages * ratio
+                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)
+                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+
+                # Value loss
+                newvalue = newvalue.view(-1)
+                if args.clip_vloss:
+                    v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
+                    v_clipped = b_values[mb_inds] + torch.clamp(
+                        newvalue - b_values[mb_inds],
+                        -args.clip_coef,
+                        args.clip_coef,
+                    )
+                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
+                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                    v_loss = 0.5 * v_loss_max.mean()
+                else:
+                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
+
+                entropy_loss = entropy.mean()
+                loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
+
+                optimizer.zero_grad()
+                loss.backward()
+                batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
+                optimizer.step()
+
+                # log plasticity metrics
+                total_active_units.append(plasticity_metrics["active_units"])
+                total_stable_rank.append(plasticity_metrics["stable_rank"])
+                total_effective_rank.append(plasticity_metrics["effective_rank"])
+                total_feature_norm.append(plasticity_metrics["feature_norm"])
+                total_feature_var.append(plasticity_metrics["feature_var"])
+                total_grad_norm.append(batch_grad_norm.item())
+                total_policy_ent.append(entropy_loss.item())
+
+            if args.target_kl is not None and approx_kl > args.target_kl:
+                break
+
+        y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
+        var_y = np.var(y_true)
+        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        # compute the l2 norm difference
+        diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
+        # compute weight magnitude
+        weight_magnitude = compute_weight_magnitude(agent)
+
+        # compute dormant units
+        if iteration % 10 == 0:
+            dormant_units = compute_dormant_units(agent, b_obs[mb_inds], 'relu', tau=0.025)
+            writer.add_scalar("plasticity/dormant_units", dormant_units, global_step)
+
+        # TRY NOT TO MODIFY: record rewards for plotting purposes
+        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
+        writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
+        writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
+        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
+        writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
+        writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
+        writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
+        writer.add_scalar("losses/explained_variance", explained_var, global_step)
+        # add plasticity metrics
+        writer.add_scalar("plasticity/active_units", np.mean(total_active_units), global_step)
+        writer.add_scalar("plasticity/stable_rank", np.mean(total_stable_rank), global_step)
+        writer.add_scalar("plasticity/effective_rank", np.mean(total_effective_rank), global_step)
+        writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)
+        writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
+        writer.add_scalar("plasticity/grad_norm", np.mean(total_grad_norm), global_step)
+        writer.add_scalar("plasticity/policy_entropy", np.mean(total_policy_ent), global_step)
+        writer.add_scalar("plasticity/feature_norm", np.mean(total_feature_norm), global_step)
+        writer.add_scalar("plasticity/feature_variance", np.mean(total_feature_var), global_step)
+        print("SPS:", int(global_step / (time.time() - start_time)))
+        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
     writer.close()
 
