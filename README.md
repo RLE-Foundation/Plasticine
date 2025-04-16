@@ -12,7 +12,7 @@
 
 **Plasticine** is a library that provides high-quality and single-file implementations of plasticity optimization algorithms in deep reinforcement learning. We highlight the features of **Plasticine** as follows:
 - 📜 Single-file implementation;
-- 🏞️ Support **Standard** and **Continual** RL Scenarios;
+- 🏞️ Support **standard**, **continual**, and **open-ended** RL Scenarios;
 - 📊 Benchmarked Implementation (13+ algorithms and 10+ plasticity metrics);
 - 🧱 Easy combination of different strategies;
 - ⚙️ Local Reproducibility via Seeding;
