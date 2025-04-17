@@ -12,7 +12,7 @@
 
 **Plasticine** is a library that provides high-quality and single-file implementations of plasticity optimization algorithms in deep reinforcement learning. We highlight the features of **Plasticine** as follows:
 - 📜 Single-file implementation;
-- 🏞️ Support **Standard** and **Continual** RL Scenarios;
+- 🏞️ Support **standard**, **continual**, and **open-ended** RL Scenarios;
 - 📊 Benchmarked Implementation (13+ algorithms and 10+ plasticity metrics);
 - 🧱 Easy combination of different strategies;
 - ⚙️ Local Reproducibility via Seeding;
@@ -119,7 +119,7 @@ The detailed formulation of these metrics can be found in the [Paper]().
 If you use Plasticine in your work, please cite our paper:
 ``` bib
 @misc{yuan2025@plasticine,
-    author = {Mingqi Yuan and Qi Wang and Guozheng Ma and Bo Li and Xin Jin and Wenjun Zeng},
+    author = {Mingqi Yuan and Qi Wang and Guozheng Ma and Bo Li and Xin Jin and Yunbo Wang and Xiaokang Yang and Wenjun Zeng},
     title = {Plasticine: Clean Plasticity Optimization in Deep Reinforcement Learning},
     year = {2025},
     publisher = {GitHub},
