@@ -49,6 +49,7 @@ class DeepMindControl(Env):
         self,
         env_ids,
         mode,
+        seed,
         task_kwargs={},
         environment_kwargs={},
         rendering="egl",
@@ -57,35 +58,38 @@ class DeepMindControl(Env):
         render_camera_id=0,
     ):
         """TODO comment up"""
-        domain, task = env_id.split('_', 1)
-        if domain == 'cup':
-            domain = 'ball_in_cup'
-            
         # for details see https://github.com/deepmind/dm_control
         assert rendering in ["glfw", "egl", "osmesa"]
         os.environ["MUJOCO_GL"] = rendering
         
-        self.domain = domain
+        self.task_kwargs = task_kwargs
+        self.environment_kwargs = environment_kwargs
+        self.env_ids = env_ids
+        # breakpoint()
+        self.mode = mode
+        self.seed = seed
         
+        # placeholder to allow built in gymnasium rendering
+        self.render_mode = "rgb_array"
+        self.render_height = render_height
+        self.render_width = render_width
+        self.render_camera_id = render_camera_id
+
         if len(self.env_ids) == 1:
-            assert mode == 'level', "Level mode only works with a single environment!"
-            assert level_offset >= 0, "Levels offset must be non-negative!"
+            assert mode == 'dynamic', "Dynamic mode only works with a single environment!"
+            self.friction_number = 0
             self.env_id = env_ids[0]
-            self.current_level = 0
             self.envs = self.build_env()
-        
         elif mode == 'task':
             # shuffle the env_ids
             np.random.shuffle(self.env_ids)
             self.env_id = env_ids[0]
             self.num_tasks = len(env_ids)
             self.round_step = 0
-            self.current_level = 200
             assert len(self.env_ids) >= 5, "Task mode must have multiple environments!"
             self.envs = self.build_env()
-
         else:
-            raise NotImplementedError("Mode must be either 'level' or 'task'!")
+            raise NotImplementedError("Mode must be either 'dynamic' or 'task'!")
 
         
 
@@ -107,30 +111,28 @@ class DeepMindControl(Env):
         return 0, 1
 
 
-    def build_env(self):
+    def build_env(self, xml_path=None):
+        breakpoint()
+        domain, task = self.env_id.split('_', 1)
+        if domain == 'cup':
+            domain = 'ball_in_cup'
         # env setup
         self._env = suite.load(
             domain,
             task,
-            task_kwargs,
-            environment_kwargs,
+            task_kwargs=self.task_kwargs,
+            environment_kwargs=self.environment_kwargs
         )
-
-        # placeholder to allow built in gymnasium rendering
-        self.render_mode = "rgb_array"
-        self.render_height = render_height
-        self.render_width = render_width
-        self.render_camera_id = render_camera_id
-
         self._observation_space = _spec_to_box(self._env.observation_spec().values())
         self._action_space = _spec_to_box([self._env.action_spec()])
 
         # set seed if provided with task_kwargs
-        if "random" in task_kwargs:
-            seed = task_kwargs["random"]
+        if "random" in self.task_kwargs:
+            seed = self.task_kwargs["random"]
             self._observation_space.seed(seed)
             self._action_space.seed(seed)
         
+        return self._env
         # self._observation_space = spaces.Dict(self._observation_space)
         
     def step(self, action):
@@ -165,15 +167,16 @@ class DeepMindControl(Env):
         camera_id = camera_id or self.render_camera_id
         return self._env.physics.render(height=height, width=width, camera_id=camera_id)
     
-    def shift(self):
+    def shift(self, xml_path=None):
         if self.mode == 'dynamic':
             # for each round, increase the level by `levels_offset`
-            self.current_level += self.level_offset
-            self.envs = self.build_env()
+            self._env.close()
+            self.env = self.build_env()
         elif self.mode == 'task':
+            self._env.close()
             # change the environment for each round
             self.env_id = self.env_ids[self.round_step % self.num_tasks]
-            self.envs = self.build_env()
+            self.env = self.build_env(xml_path=xml_path)
             self.round_step += 1
         else:
             raise NotImplementedError("Mode must be either 'level' or 'task'!")

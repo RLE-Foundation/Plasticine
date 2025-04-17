@@ -61,7 +61,7 @@ class Args:
     env_id: str = "Hopper-v4"
     """the id of the environment"""
     env_ids: list = field(default_factory=list)
-    """the id of the environments"""
+    """the ids of the environments"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
@@ -91,21 +91,31 @@ class Args:
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
+    
+    """------------------------Plasticine------------------------"""
+    num_steps_per_round: int = 1000
+    """the number of episodes per round"""
+    cont_mode: str = "task"
+    """the mode of the continual learning task, `level` or `task`"""
+    """------------------------Plasticine------------------------"""
 
+# def make_env(env_ids, seed, idx, capture_video, run_name):
+#     print(f"env_id: {env_ids[idx]}")
+#     env = dmc_wrappers.DeepMindControl(
+#         env_ids=env_ids,
+#         mode=args.cont_mode
+#     )
+#     if capture_video and idx == 0:
+#         env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+    
+#     return env
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+def make_env(env_ids, seed, idx, capture_video, run_name):
     def thunk():
-        if "_" in env_id:
-            domain_name, task_name = env_id.split("_")
-            env = dmc_wrappers.DeepMindControl(
-                env_id=env_id
-            )
-        else:
-            env = gym.make(env_id)
-            env = gym.wrappers.RecordEpisodeStatistics(env)
-            env.action_space.seed(seed)
-            env.observation_space.seed(seed)
-
+        env = dmc_wrappers.DeepMindControl(
+            env_ids=env_ids,
+            mode=args.cont_mode
+        )
         if capture_video and idx == 0:
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         
@@ -215,15 +225,30 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     global_timestamp = int(time.time())
     
+    # if args.random_tasks:
+    #     import random
+    #     random.shuffle(args.env_ids)
     
-    
-    if args.random_tasks:
-        import random
-        random.shuffle(args.env_ids)
-        
     for cycle in range(3):
-        for env_id in args.env_ids:
-            # run_name = f"{env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+        for per_round in range(len(args.env_ids)):  
+            # TRY NOT TO MODIFY: seeding
+            random.seed(args.seed)
+            np.random.seed(args.seed)
+            torch.manual_seed(args.seed)
+            torch.backends.cudnn.deterministic = args.torch_deterministic
+
+            # env setup
+            # envs = make_env(args.env_ids, args.seed, 1, args.capture_video, run_name) 
+            # breakpoint()
+            log_dir = 'std_td3_mujoco_vanilla_runs'
+            parent_dir = f"{log_dir}/{args.exp_name}_{args.seed}_{global_timestamp}"
+            run_name = parent_dir
+            
+            envs = gym.vector.SyncVectorEnv(
+                [make_env(args.env_ids, args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
+            )
+            assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+            
             log_dir = 'std_td3_mujoco_vanilla_runs'
             parent_dir = f"{log_dir}/{args.exp_name}_{args.seed}_{global_timestamp}"
             run_name = parent_dir
@@ -241,6 +266,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     save_code=True,
                 )
             
+            for env in envs.envs:
+                env_id = env.env_id
+                break
+            
             env_subdir = f"{parent_dir}/{env_id}"
             # os.makedirs(env_subdir, exist_ok=True)
             writer = SummaryWriter(f"{env_subdir}")
@@ -249,18 +278,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
             )
 
-            # TRY NOT TO MODIFY: seeding
-            random.seed(args.seed)
-            np.random.seed(args.seed)
-            torch.manual_seed(args.seed)
-            torch.backends.cudnn.deterministic = args.torch_deterministic
-
-            # env setup
-            envs = gym.vector.SyncVectorEnv(
-                [make_env(env_id, args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
-            )
-            assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
-
+            
             if actor is None:  
                 actor = Actor(envs).to(device)
                 qf1 = QNetwork(envs).to(device)
@@ -286,7 +304,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     qf1_target.load_state_dict(qf1.state_dict())
                     qf2_target.load_state_dict(qf2.state_dict())
                 
-
             # save the initial state of the model
             actor_copy = save_model_state(actor)
             qf1_copy = save_model_state(qf1)
@@ -420,3 +437,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             torch.save(qf1.state_dict(), f"{env_subdir}/qf1.pth")
             torch.save(qf2.state_dict(), f"{env_subdir}/qf2.pth")
             pre_env_id = env_id
+            
+            """------------------------Plasticine------------------------"""
+            # shift the environment
+            for env in envs.envs:
+                env.shift()
+            """------------------------Plasticine------------------------"""
