@@ -8,6 +8,6 @@
 
 export PYTHONPATH="${PYTHONPATH}:./plasticine"
 
-CUDA_VISIBLE_DEVICES=6 && python plasticine/standard/td3_dmc_vanilla.py \
+CUDA_VISIBLE_DEVICES=6 && python experimental/td3_dmc_vanilla.py \
 --track \
 --env_id "walker_walk" 
