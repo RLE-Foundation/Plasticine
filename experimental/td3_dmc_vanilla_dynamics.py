@@ -2,7 +2,7 @@
 import os
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 
 import gymnasium as gym
 import numpy as np
@@ -58,6 +58,8 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
     """the id of the environment"""
+    env_ids: list = field(default_factory=list)
+    """the ids of the environments"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
@@ -87,12 +89,20 @@ class Args:
     """the interval of evaluating the plasticity metrics"""
     plasticity_eval_size: int = 1000
     """the size of the evaluation data for the plasticity metrics"""
+    """------------------------Plasticine------------------------"""
+    num_steps_per_round: int = 1000
+    """the number of episodes per round"""
+    cont_mode: str = "dynamic"
+    """the mode of the continual learning task, `level` or `task`"""
+    """------------------------Plasticine------------------------"""
 
 
-def make_env(env_id, seed, idx, capture_video, run_name, xml_path):
+def make_env(env_ids, seed, idx, capture_video, run_name, xml_path):
     def thunk():
         env = dmc_wrappers.DeepMindControl(
-            env_id=env_id,
+            env_ids=env_ids,
+            mode=args.cont_mode,
+            seed=seed,
             environment_kwargs={'xml_path':xml_path}
         )
 
@@ -193,7 +203,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         )
     
     args = tyro.cli(Args)
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"{args.env_ids[0]}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
 
@@ -228,10 +238,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     friction_number = 0
     
     from dm_control import suite
-    xml_path = os.path.join(os.path.dirname(suite.__file__), 'humanoid.xml')
+    xml_path = os.path.join(os.path.dirname(suite.__file__), 'quadruped.xml')
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name, xml_path=xml_path) for i in range(args.num_envs)]
+        [make_env(args.env_ids, args.seed + i, i, args.capture_video, run_name, xml_path=xml_path) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -300,20 +310,26 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         if global_step % args.change_time == 0 and global_step != 0:
             envs.close()
+            """------------------------Plasticine------------------------"""
+            # shift the environment
             friction_number += 1
             new_friction = frictions[args.seed][friction_number]
-            old_file = os.path.join(os.path.dirname(suite.__file__), 'humanoid.xml')
+            old_file = os.path.join(os.path.dirname(suite.__file__), 'quadruped.xml')
             import xml.etree.ElementTree as ET
             tree = ET.parse(old_file)
             root = tree.getroot()
-            root[5][1][0].attrib['friction'] = str(new_friction)
+            root[6][1][5][0].attrib['friction'] = str(new_friction)
             current_working_directory = os.getcwd()
-            tree.write('humanoid.xml')
-            xml_path = current_working_directory + '/humanoid.xml'
-            envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name, xml_path=xml_path) for i in range(args.num_envs)]
-    )
-            
+            tree.write('quadruped.xml')
+            xml_path = current_working_directory + '/quadruped.xml'
+            for env in envs.envs:
+                env.shift(xml_path)
+                env = env.envs
+            obs, _ = envs.reset(seed=args.seed)
+            """------------------------Plasticine------------------------"""
+    #         envs = gym.vector.SyncVectorEnv(
+    #     [make_env(args.env_ids, args.seed + i, i, args.capture_video, run_name, xml_path=xml_path) for i in range(args.num_envs)]
+    # ) 
         
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
