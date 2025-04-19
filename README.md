@@ -105,6 +105,31 @@ nn.Linear(512*2, 512),
 
 The detailed formulation of these metrics can be found in the [Paper]().
 
+### Learning Scenarios
+#### Standard
+| <img src="assets/demon_attack.gif" style="height:150px;width: auto;"> | <img src="assets/bossfight.png" style="height:150px;width: auto;"> |<img src="assets/dog_run.png" style="height:150px;width: auto;"> | 
+|:-----------------------|:-----------------------|:-----------------------|
+|ALE|Procgen|DMC|
+
+#### Continual
+- Continual Procgen
+
+| ![cont_procgen_ls](assets/cont_procgen_ls.png) | ![cont_procgen_ts](assets/cont_procgen_ts.png) |
+|:-----------------------|:-----------------------|
+|**Level-Shift**: The same task with a sequentially-incremented `start_level` parameter for each round. |**Task-Shift**: Different tasks with a same `start_level` parameter for each round.|
+
+- Continual DMC
+
+| ![cont_dmc_ds](assets/cont_dmc_ds.png) | ![cont_dmc_ts](assets/cont_dmc_ts.png) |
+|:--|:--|
+|**Dynamic-Shift**: The same task with a sequentially and randomly-sampled `coefficient_of_friction` parameter for each round.|**Task-Shift**: Different tasks with a same `coefficient_of_friction` parameter for each round.|
+
+#### Open-ended
+| ![craftax_farming](assets/farming.gif) | ![craftax_mining](assets/mining.gif) |![craftax_archery](assets/archery.gif) | ![craftax_magic](assets/magic.gif) |
+|:-----------------------|:-----------------------|:-----------------------|:-----------------------|
+|Farming|Mining|Archery|Magic|
+
+
 ## Dataset
 ## Discussion and Contribution
 
