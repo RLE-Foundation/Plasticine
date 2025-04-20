@@ -5,7 +5,7 @@ import numpy as np
 import gym
 
 
-class PlasticineProcgen:
+class ContinualProcgen:
     """
     A wrapper for the Procgen environment that allows for switching between levels and tasks.
 

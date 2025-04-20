@@ -24,7 +24,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
-from plasticine.procgen_wrappers import PlasticineProcgen
+from plasticine.procgen_wrappers import ContinualProcgen
 
 @dataclass
 class Args:
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     """------------------------Plasticine------------------------"""
     # env setup
     env_ids = ['starpilot']
-    envs = PlasticineProcgen(
+    envs = ContinualProcgen(
         env_ids=env_ids,
         num_envs=args.num_envs,
         mode=args.cont_mode,

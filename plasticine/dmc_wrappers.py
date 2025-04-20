@@ -1,11 +1,14 @@
-import logging
-import os
-
-import numpy as np
 from dm_control import suite
 from dm_env import specs
 from gymnasium.core import Env
 from gymnasium.spaces import Box
+
+import logging
+import pickle
+import os
+import numpy as np
+import gymnasium as gym
+import xml.etree.ElementTree as ET
 
 
 def _spec_to_box(spec, dtype=np.float32):
@@ -128,3 +131,107 @@ class StandardDMC(Env):
         width = width or self.render_width
         camera_id = camera_id or self.render_camera_id
         return self._env.physics.render(height=height, width=width, camera_id=camera_id)
+
+
+class ContinualDMC:
+    """
+    A wrapper for the DMC environment that allows for switching between dynamics and tasks.
+
+    Args:
+        env_ids (list): List of environment IDs.
+        mode (str): Mode of the environment ('dynamic' or 'task').
+        num_envs (int): Number of environments to run in parallel.
+        seed (int): Random seed for the environment.
+        capture_video (bool): Whether to capture video of the environment.
+        run_name (str): Name of the run for video capture.
+
+    Returns:
+        None
+    """
+    def __init__(self,
+                 env_ids,
+                 mode,
+                 num_envs=1,
+                 seed=1,
+                 capture_video=False, 
+                 run_name=''
+                 ) -> None:
+        self.env_ids = env_ids
+        self.mode = mode
+        self.num_envs = num_envs
+        self.seed = seed
+        self.capture_video = capture_video
+        self.run_name = run_name
+
+        if len(self.env_ids) == 1:
+            assert mode == 'dynamic', "Dynamic mode only works with a single environment!"
+            self.current_env_id = env_ids[0]
+            self.envs = self.build_env()
+
+            self.friction_number = 0
+            self.frictions = pickle.load(open("plasticine/friction", "rb+"))
+
+        elif mode == 'task':
+            # shuffle the env_ids
+            np.random.shuffle(self.env_ids)
+            self.current_env_id = env_ids[0]
+            self.num_tasks = len(env_ids)
+            self.round_step = 0
+            assert len(self.env_ids) >= 5, "Task mode must have multiple environments!"
+            self.envs = self.build_env()
+    
+    def build_env(self, xml_path=None):
+        def make_env(env_id, seed, idx, capture_video, run_name):
+            env_kwargs = {'xml_path':xml_path} if xml_path is not None else {}
+            def thunk():
+                domain, task = env_id.split("_")
+                if capture_video and idx == 0:
+                    env = StandardDMC(domain, task, task_kwargs={"random": seed}, environment_kwargs=env_kwargs)
+                    env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+                else:
+                    env = StandardDMC(domain, task, task_kwargs={"random": seed}, environment_kwargs=env_kwargs)
+                env = gym.wrappers.RecordEpisodeStatistics(env)
+                return env
+
+            return thunk
+    
+        envs = gym.vector.SyncVectorEnv(
+            [make_env(self.current_env_id, self.seed + i, i, self.capture_video, self.run_name) 
+             for i in range(self.num_envs)]
+        )
+
+        return envs
+
+    def reset(self):
+        return self.envs.reset()
+
+    def step(self, actions):
+        return self.envs.step(actions)
+
+    def shift(self):
+        if self.mode == 'dynamic':
+            # for each round, change the dynamic (coefficient of friction)
+            old_file = os.path.join(os.path.dirname(suite.__file__), 'quadruped.xml')
+            tree = ET.parse(old_file)
+            root = tree.getroot()
+            new_friction = self.frictions[self.seed][self.friction_number]
+            self.friction_number += 1
+            root[6][1][5][0].attrib['friction'] = str(new_friction)
+            current_working_directory = os.getcwd()
+            tree.write('quadruped.xml')
+            xml_path = current_working_directory + '/quadruped.xml'
+            self.envs = self.build_env(xml_path=xml_path)
+
+        elif self.mode == 'task':
+            # change the environment for each round
+            self.env_id = self.env_ids[self.round_step % self.num_tasks]
+            self.envs = self.build_env()
+            self.round_step += 1
+        else:
+            raise NotImplementedError("Mode must be either 'dynamic' or 'task'!")
+        
+    def gen_xml(self, xml_path):
+        """
+        Generate the xml file for the environment.
+        """
+        c
