@@ -1,7 +1,7 @@
 <div align=center>
 <p align="center"><img align="center" width="500px" src="assets/logo.png"></p>
 
-## Plasticine: Clean Plasticity Optimization in Deep Reinforcement Learning
+## Plasticine: Accelerating Research in Plasticity-Motivated Deep Reinforcement Learning
 <img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> <a href="https://discord.gg/swMV6kgV">
   <img src="https://img.shields.io/badge/Discussion-Discord-5562EA" alt="Discussion Discord">
 
@@ -13,10 +13,10 @@
 **Plasticine** is a library that provides high-quality and single-file implementations of plasticity optimization algorithms in deep reinforcement learning. We highlight the features of **Plasticine** as follows:
 - 📜 Single-file implementation;
 - 🏞️ Support **standard**, **continual**, and **open-ended** RL Scenarios;
-- 📊 Benchmarked Implementation (13+ algorithms and 10+ plasticity metrics);
+- 📊 Benchmarked implementation (13+ algorithms and 10+ plasticity metrics);
 - 🧱 Easy combination of different strategies;
-- ⚙️ Local Reproducibility via Seeding;
-- 🧫 Experiment Management with [Weights and Biases]().
+- ⚙️ Local reproducibility via seeding;
+- 🧫 Experiment management with [Weights and Biases]().
 
 > **Plasticine** is built on the top of [CleanRL](https://github.com/vwxyzjn/cleanrl). Thanks for the excellent project!
 
@@ -145,7 +145,8 @@ If you use Plasticine in your work, please cite our paper:
 ``` bib
 @misc{yuan2025@plasticine,
     author = {Mingqi Yuan and Qi Wang and Guozheng Ma and Bo Li and Xin Jin and Yunbo Wang and Xiaokang Yang and Wenjun Zeng},
-    title = {Plasticine: Clean Plasticity Optimization in Deep Reinforcement Learning},
+    title = {Plasticine: Accelerating Research in Plasticity-Motivated
+    Deep Reinforcement Learning},
     year = {2025},
     publisher = {GitHub},
     journal = {GitHub Repository},
