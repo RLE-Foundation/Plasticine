@@ -142,7 +142,7 @@ The detailed formulation of these metrics can be found in the [Paper]().
 If you use Plasticine in your work, please cite our paper:
 ``` bib
 @misc{yuan2025@plasticine,
-    author = {Mingqi Yuan and Qi Wang and Guozheng Ma and Bo Li and Xin Jin and Yunbo Wang and Xiaokang Yang and Wenjun Zeng},
+    author = {Mingqi Yuan and Qi Wang and Guozheng Ma and Bo Li and Xin Jin and Yunbo Wang and Xiaokang Yang and Wenjun Zeng and Dacheng Tao},
     title = {Plasticine: Accelerating Research in Plasticity-Motivated Deep Reinforcement Learning},
     year = {2025},
     publisher = {GitHub},
@@ -152,4 +152,5 @@ If you use Plasticine in your work, please cite our paper:
 ```
 
 ## Acknowledgement
-<!-- This project is supported by [The Hong Kong Polytechnic University](http://www.polyu.edu.hk/), [Eastern Institute for Advanced Study](http://www.eias.ac.cn/), and [FLW-Foundation](FLW-Foundation). [EIAS HPC](https://hpc.eias.ac.cn/) provides a GPU computing platform, and [HUAWEI Ascend Community](https://www.hiascend.com/) provides an NPU computing platform for our testing. Some code of this project is borrowed or inspired by several excellent projects, and we highly appreciate them. See [ACKNOWLEDGMENT.md](https://github.com/RLE-Foundation/rllte/blob/main/ACKNOWLEDGMENT.md). -->
+
+This project is supported by [The Hong Kong Polytechnic University](http://www.polyu.edu.hk/), [Ningbo Institute of Digital Twin, Eastern Institute of Technology, Ningbo](https://idt.eitech.edu.cn/), [Shanghai Jiao Tong University](https://en.sjtu.edu.cn/), [Nanyang Technological University](https://www.ntu.edu.sg/), and [LimX Dynamics](https://limxdynamics.com/). We thank the high-performance computing center at Eastern Institute of Technology and Ningbo Institute of Digital Twin for providing the computing resources. Some code of this project is borrowed or inspired by several excellent projects, and we highly appreciate them.
