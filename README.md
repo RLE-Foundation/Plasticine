@@ -20,7 +20,7 @@
 
 > **Plasticine** is built on the top of [CleanRL](https://github.com/vwxyzjn/cleanrl). Thanks for the excellent project!
 
-> Join the [Discord](https://discord.gg/swMV6kgV) channel for discussion!
+> Join the [Discord](https://discord.gg/YGApGaXAHW) channel for discussion!
 
 ## Quick Start
 - Create an environment and install the dependencies:
