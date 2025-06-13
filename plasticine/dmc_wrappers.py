@@ -163,7 +163,8 @@ class ContinualDMC:
         self.capture_video = capture_video
         self.run_name = run_name
 
-        if len(self.env_ids) == 1:
+        if mode == 'dynamics':
+            self.env_ids = ['quadruped_walk']
             assert mode == 'dynamics', "Dynamics mode only works with a single environment!"
             self.current_env_id = env_ids[0]
             self.envs = self.build_env()
