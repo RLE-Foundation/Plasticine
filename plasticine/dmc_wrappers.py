@@ -170,7 +170,7 @@ class ContinualDMC:
             self.envs = self.build_env()
 
             self.friction_number = 0
-            self.frictions = pickle.load(open("plasticine/friction", "rb+"))
+            self.frictions = pickle.load(open("plasticine/frictions", "rb+"))
 
         elif mode == 'task':
             # shuffle the env_ids
