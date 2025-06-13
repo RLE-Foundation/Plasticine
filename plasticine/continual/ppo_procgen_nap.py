@@ -24,6 +24,8 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.procgen_wrappers import ContinualProcgen
+
 
 @dataclass
 class Args:
@@ -45,10 +47,10 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "starpilot"
-    """the id of the environment"""
-    total_timesteps: int = int(25e6)
-    """total timesteps of the experiments"""
+    # env_id: str = "starpilot"
+    # """the id of the environment"""
+    # total_timesteps: int = int(25e6)
+    # """total timesteps of the experiments"""
     learning_rate: float = 5e-4
     """the learning rate of the optimizer"""
     num_envs: int = 64
@@ -87,15 +89,20 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
-
+    
     """------------------------Plasticine------------------------"""
-    # Arguments for the Parseval Regularization (PR)
-    parseval_lambda: float = 1e-3
-    """the strength of the Parseval Regularization"""
-    parseval_s: float = 1.0
-    """the scaling factor of the Parseval Regularization"""
+    cont_mode: str = "level"
+    """the mode of the continual learning task, `level` or `task`"""
+    num_rounds: int = 10
+    """the number of rounds for the continual learning task"""
+    num_episodes_per_round: int = 100
+    """the number of episodes per round"""
+    level_offset: int = 5
+    """the level offset for the `level` mode"""
+    # Arguments for the Normalize-and-Project (NaP)
+    projection_interval: int = 10
+    """the interval for NaP weight projection"""
     """------------------------Plasticine------------------------"""
-
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -139,52 +146,19 @@ class ConvSequence(nn.Module):
         _c, h, w = self._input_shape
         return (self._out_channels, (h + 1) // 2, (w + 1) // 2)
 
-"""------------------------Plasticine------------------------"""
-class ParsevalLinear(nn.Linear):
-    """
-    Linear layer with Parseval regularization.
-    
-    Args:
-        Same as nn.Linear plus:
-        lambda_reg (float): Regularization strength
-        s (float): Target scale for singular values
-    """
-    def __init__(self, in_features, out_features, bias=True, lambda_reg=1e-3, s=1.0):
-        super().__init__(in_features, out_features, bias)
-        self.lambda_reg = lambda_reg
-        self.s = s
-        
-    def parseval_loss(self):
-        """
-        Computes the Parseval regularization loss for this layer's weight matrix.
-        """
-        # Skip if not training or regularization is disabled
-        if not self.training or self.lambda_reg <= 0:
-            return torch.tensor(0.0, device=self.weight.device)
-            
-        # Compute WW^T
-        wwt = torch.mm(self.weight, self.weight.t())
-        
-        # Target is s*I
-        target = self.s * torch.eye(wwt.shape[0], device=self.weight.device)
-        
-        # Frobenius norm squared of difference
-        loss = torch.square(torch.norm(wwt - target, p='fro'))
-        
-        return self.lambda_reg * loss
-"""------------------------Plasticine------------------------"""
 
 class Agent(nn.Module):
-    def __init__(self, envs, parseval_lambda, parseval_s):
+    def __init__(self, envs):
         super().__init__()
         self.obs_shape = envs.single_observation_space.shape
         self.action_dim = envs.single_action_space.n
-        self.parseval_lambda = parseval_lambda
-        self.parseval_s = parseval_s
 
         self.encoder = self.gen_encoder()
         self.policy = self.gen_policy()
         self.value = self.gen_value()
+
+        # record initial norms of all weight parameters for NaP
+        self.initial_norms = self._record_initial_norms()
 
     def gen_encoder(self):
         h, w, c = self.obs_shape
@@ -194,17 +168,12 @@ class Agent(nn.Module):
             conv_seq = ConvSequence(shape, out_channels)
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
-        """------------------------Plasticine------------------------"""
         conv_seqs += [
             nn.Flatten(),
             nn.ReLU(),
-            ParsevalLinear(in_features=shape[0] * shape[1] * shape[2], 
-                           out_features=256,
-                           lambda_reg=self.parseval_lambda,
-                           s=self.parseval_s),
+            nn.Linear(in_features=shape[0] * shape[1] * shape[2], out_features=256),
             nn.ReLU(),
         ]
-        """------------------------Plasticine------------------------"""
         return nn.Sequential(*conv_seqs)
 
     def gen_policy(self):
@@ -244,29 +213,55 @@ class Agent(nn.Module):
     def forward(self, x):
         """for computing the RDU"""
         return self.encoder(x.permute((0, 3, 1, 2)) / 255.0)  # "bhwc" -> "bchw"
-    
-    """------------------------Plasticine------------------------"""
-    def parseval_regularization_loss(self):
-        """
-        Compute total Parseval regularization loss across all applicable layers.
-        """
-        total_loss = torch.tensor(0.0, device=next(self.parameters()).device)
-        
-        # Check all modules in policy and value encoders
-        for module in [self.encoder]:
-            for layer in module:
-                if isinstance(layer, ParsevalLinear):
-                    total_loss = total_loss + layer.parseval_loss()
-                    
-        return total_loss
-    """------------------------Plasticine------------------------"""
+
+    def _record_initial_norms(self):
+        """Record initial norms of all weight parameters for NaP"""
+        norms = {}
+        for name, param in self.named_parameters():
+            if 'weight' in name and 'norm' not in name:  # Skip normalization layer params
+                norms[name] = param.data.norm(2).item()
+        return norms
+
+    def _project_weights(self):
+        """Project weights to their initial norms for NaP"""
+        with torch.no_grad():
+            for name, param in self.named_parameters():
+                if 'weight' in name and 'norm' not in name and name in self.initial_norms:
+                    # Project weight matrices to initial norm
+                    target_norm = self.initial_norms[name]
+                    current_norm = param.data.norm(2)
+                    if current_norm > 0:
+                        param.data.mul_(target_norm / current_norm)
+
+                # Handle scale and offset parameters if specified
+                if ('scale' in name or 'bias' in name):
+                    # For homogeneous activations (like ReLU), we can normalize scale and offset together
+                    if 'scale' in name:
+                        # Find corresponding offset/bias parameter
+                        offset_name = name.replace('scale', 'bias')
+                        if offset_name in dict(self.named_parameters()):
+                            scale_param = param
+                            offset_param = dict(self.named_parameters())[offset_name]
+
+                            # Compute joint norm and project
+                            joint_norm = torch.sqrt(scale_param.data.pow(2).sum() + offset_param.data.pow(2).sum())
+                            target_norm = torch.sqrt(torch.tensor(2.0))  # Initial norm for scale=1, offset=0
+                            if joint_norm > 0:
+                                scale_param.data.mul_(target_norm / joint_norm)
+                                offset_param.data.mul_(target_norm / joint_norm)
+
+    def nap(self):
+        """Perform NaP weight projection at specified intervals"""
+        self._project_weights()
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    # args.num_iterations = args.total_timesteps // args.batch_size
+    args.num_iterations = args.num_rounds * args.num_episodes_per_round
+    run_name = f"{args.cont_mode}__{args.exp_name}__{args.seed}__{int(time.time())}"
+
     if args.track:
         import wandb
 
@@ -279,7 +274,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_procgen_pr_runs'
+    log_dir = 'cont_ppo_procgen_nap_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -294,20 +289,22 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
+    """------------------------Plasticine------------------------"""
     # env setup
-    envs = ProcgenEnv(num_envs=args.num_envs, env_name=args.env_id, num_levels=0, start_level=0, distribution_mode="easy")
-    envs = gym.wrappers.TransformObservation(envs, lambda obs: obs["rgb"])
-    envs.single_action_space = envs.action_space
-    envs.single_observation_space = envs.observation_space["rgb"]
-    envs.is_vector_env = True
-    envs = gym.wrappers.RecordEpisodeStatistics(envs)
-    if args.capture_video:
-        envs = gym.wrappers.RecordVideo(envs, f"videos/{run_name}")
-    envs = gym.wrappers.NormalizeReward(envs, gamma=args.gamma)
-    envs = gym.wrappers.TransformReward(envs, lambda reward: np.clip(reward, -10, 10))
-    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+    env_ids = ['bigfish', 'caveflyer', 'dodgeball', 'miner', 'starpilot']
+    envs = ContinualProcgen(
+        env_ids=env_ids,
+        num_envs=args.num_envs,
+        mode=args.cont_mode,
+        level_offset=args.level_offset,
+        gamma=args.gamma,
+    )
+    # connect all the env_ids to a string
+    env_ids = '-'.join(env_ids)
+    writer.add_text("env_ids", env_ids)
+    """------------------------Plasticine------------------------"""
 
-    agent = Agent(envs, args.parseval_lambda, args.parseval_s).to(device)
+    agent = Agent(envs).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
@@ -325,6 +322,17 @@ if __name__ == "__main__":
     next_done = torch.zeros(args.num_envs).to(device)
 
     for iteration in range(1, args.num_iterations + 1):
+        """------------------------Plasticine------------------------"""
+        # shift the environment
+        if (iteration - 1) % args.num_episodes_per_round == 0:
+            # shift the environment
+            envs.shift()
+            # reset the environment
+            next_obs = torch.Tensor(envs.reset()).to(device)
+            next_done = torch.zeros(args.num_envs).to(device)
+            print(f"iteration: {iteration}, env_id: {envs.env_id}, current_level: {envs.current_level}")
+        """------------------------Plasticine------------------------"""
+        
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
@@ -436,8 +444,6 @@ if __name__ == "__main__":
 
                 entropy_loss = entropy.mean()
                 loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
-                # add the Parseval Regularization loss
-                loss += agent.parseval_regularization_loss()
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -459,6 +465,12 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        """------------------------Plasticine------------------------"""
+        # perform NaP weight projection
+        if iteration % args.projection_interval == 0:
+            agent.nap()
+        """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
         diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)

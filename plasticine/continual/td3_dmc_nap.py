@@ -38,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -90,6 +90,9 @@ class Args:
     """the number of rounds for the continual learning task"""
     num_steps_per_round: int = 1000000
     """the number of steps per round"""
+    # Arguments for the Normalize-and-Project (NaP) method
+    projection_interval: int = 10
+    """the interval for NaP weight projection"""
     """------------------------Plasticine------------------------"""
 
 
@@ -101,6 +104,11 @@ class QNetwork(nn.Module):
             np.prod(env.single_action_space.shape)
         self.value_encoder = self.gen_encoder()
         self.value = self.gen_value()
+
+        """------------------------Plasticine------------------------"""
+        # record initial norms of all weight parameters for NaP
+        self.initial_norms = self._record_initial_norms()
+        """------------------------Plasticine------------------------"""
     
     def gen_encoder(self):
         enc = nn.Sequential(
@@ -124,7 +132,48 @@ class QNetwork(nn.Module):
         x = torch.cat([x, a], 1)
         x = self.value_encoder(x)
         return x
+    
+    """------------------------Plasticine------------------------"""
+    def _record_initial_norms(self):
+        """Record initial norms of all weight parameters for NaP"""
+        norms = {}
+        for name, param in self.named_parameters():
+            if 'weight' in name and 'norm' not in name:  # Skip normalization layer params
+                norms[name] = param.data.norm(2).item()
+        return norms
 
+    def _project_weights(self):
+        """Project weights to their initial norms for NaP"""
+        with torch.no_grad():
+            for name, param in self.named_parameters():
+                if 'weight' in name and 'norm' not in name and name in self.initial_norms:
+                    # Project weight matrices to initial norm
+                    target_norm = self.initial_norms[name]
+                    current_norm = param.data.norm(2)
+                    if current_norm > 0:
+                        param.data.mul_(target_norm / current_norm)
+
+                # Handle scale and offset parameters if specified
+                if ('scale' in name or 'bias' in name):
+                    # For homogeneous activations (like ReLU), we can normalize scale and offset together
+                    if 'scale' in name:
+                        # Find corresponding offset/bias parameter
+                        offset_name = name.replace('scale', 'bias')
+                        if offset_name in dict(self.named_parameters()):
+                            scale_param = param
+                            offset_param = dict(self.named_parameters())[offset_name]
+
+                            # Compute joint norm and project
+                            joint_norm = torch.sqrt(scale_param.data.pow(2).sum() + offset_param.data.pow(2).sum())
+                            target_norm = torch.sqrt(torch.tensor(2.0))  # Initial norm for scale=1, offset=0
+                            if joint_norm > 0:
+                                scale_param.data.mul_(target_norm / joint_norm)
+                                offset_param.data.mul_(target_norm / joint_norm)
+
+    def nap(self):
+        """Perform NaP weight projection at specified intervals"""
+        self._project_weights()
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -133,6 +182,11 @@ class Actor(nn.Module):
         self.action_dim = np.prod(env.single_action_space.shape)
         self.policy_encoder = self.gen_encoder()
         self.policy = self.gen_policy()
+        
+        """------------------------Plasticine------------------------"""
+        # record initial norms of all weight parameters for NaP
+        self.initial_norms = self._record_initial_norms()
+        """------------------------Plasticine------------------------"""
 
         # action rescaling
         self.register_buffer(
@@ -170,6 +224,48 @@ class Actor(nn.Module):
     def get_features(self, x):
         x = self.policy_encoder(x)
         return x
+    
+    """------------------------Plasticine------------------------"""
+    def _record_initial_norms(self):
+        """Record initial norms of all weight parameters for NaP"""
+        norms = {}
+        for name, param in self.named_parameters():
+            if 'weight' in name and 'norm' not in name:  # Skip normalization layer params
+                norms[name] = param.data.norm(2).item()
+        return norms
+
+    def _project_weights(self):
+        """Project weights to their initial norms for NaP"""
+        with torch.no_grad():
+            for name, param in self.named_parameters():
+                if 'weight' in name and 'norm' not in name and name in self.initial_norms:
+                    # Project weight matrices to initial norm
+                    target_norm = self.initial_norms[name]
+                    current_norm = param.data.norm(2)
+                    if current_norm > 0:
+                        param.data.mul_(target_norm / current_norm)
+
+                # Handle scale and offset parameters if specified
+                if ('scale' in name or 'bias' in name):
+                    # For homogeneous activations (like ReLU), we can normalize scale and offset together
+                    if 'scale' in name:
+                        # Find corresponding offset/bias parameter
+                        offset_name = name.replace('scale', 'bias')
+                        if offset_name in dict(self.named_parameters()):
+                            scale_param = param
+                            offset_param = dict(self.named_parameters())[offset_name]
+
+                            # Compute joint norm and project
+                            joint_norm = torch.sqrt(scale_param.data.pow(2).sum() + offset_param.data.pow(2).sum())
+                            target_norm = torch.sqrt(torch.tensor(2.0))  # Initial norm for scale=1, offset=0
+                            if joint_norm > 0:
+                                scale_param.data.mul_(target_norm / joint_norm)
+                                offset_param.data.mul_(target_norm / joint_norm)
+
+    def nap(self):
+        """Perform NaP weight projection at specified intervals"""
+        self._project_weights()
+    """------------------------Plasticine------------------------"""
 
 
 if __name__ == "__main__":
@@ -196,7 +292,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_nap_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -341,6 +437,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+
+            """------------------------Plasticine------------------------"""
+            # perform NaP weight projection
+            if global_step % args.projection_interval == 0:
+                actor.nap()
+                qf1.nap()
+                qf2.nap()
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

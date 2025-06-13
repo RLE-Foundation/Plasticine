@@ -133,7 +133,7 @@ The detailed formulation of these metrics can be found in the [Paper]().
 
 - For discussion and questions:
   + [GitHub issues](https://github.com/RLE-Foundation/Plasticine/issues)
-  + [Discord channel](https://discord.gg/swMV6kgV)
+  + [Discord channel](https://discord.gg/YGApGaXAHW)
 
 - For contribution:
   - Read the `CONTRIBUTING.md` before contributing to the project!

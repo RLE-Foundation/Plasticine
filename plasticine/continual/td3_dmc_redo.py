@@ -38,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -90,7 +90,13 @@ class Args:
     """the number of rounds for the continual learning task"""
     num_steps_per_round: int = 1000000
     """the number of steps per round"""
+    # Arguments for the ReDo operation
+    redo_tau: float = 0.025
+    """the weight of the ReDo loss"""
+    redo_frequency: int = 1000
+    """the frequency of the ReDo operation"""
     """------------------------Plasticine------------------------"""
+
 
 
 # ALGO LOGIC: initialize agent here:
@@ -170,6 +176,103 @@ class Actor(nn.Module):
     def get_features(self, x):
         x = self.policy_encoder(x)
         return x
+    
+"""------------------------Plasticine------------------------"""
+def redo_reset(model, data, tau, flag):
+    """
+    Apply the ReDo operation to the model.
+
+    Args:
+        model (torch.nn.Module): The model to be modified.
+        data (Dict): The batch data to compute neuron scores.
+        tau (float): The threshold for the ReDo operation.
+        flag (str): The type of model ('policy' or 'value').
+
+    Returns:
+        None
+    """
+    with torch.no_grad():
+        s_scores_dict = compute_neuron_scores(model, data, flag)
+        modules = [m for m in model.named_modules() if isinstance(m[1], torch.nn.Linear)]
+
+        for i, (name, module) in enumerate(modules):
+            # Skip the first entry, which is the model itself in named_modules()
+            if not isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
+                continue  # Skip non-relevant modules
+            
+            if 'policy_encoder' in name or 'value_encoder' in name:
+                base_name_parts = name.split(".")
+                base_name_parts[-1] = str(int(base_name_parts[-1]) + 1)
+                base_name = ".".join(base_name_parts)
+            else:
+                continue  # Skip the final policy and value layers
+            
+            if base_name in s_scores_dict:
+                s_scores = s_scores_dict[base_name]
+                reset_mask = s_scores <= tau
+
+                # Check if there is a next module in the list and get it
+                next_module = modules[i + 1][1] if i + 1 < len(modules) else None
+                # Assuming reinitialize_weights is modified to handle the next_module
+                # You would need to adjust reinitialize_weights to apply the necessary changes
+                # to both the current and next modules based on reset_mask.
+                reinitialize_weights(module, reset_mask, next_module)
+
+def compute_neuron_scores(model, data, flag):
+    # Create a dictionary to store the s scores for each layer
+    s_scores_dict = {}
+
+    # Register a forward hook to capture the activations of each layer
+    activations = {}
+    hooks = []
+
+    def hook(module, input, output):
+        activations[module] = output.detach()
+
+    for name, module in model.named_modules():
+        if isinstance(module, torch.nn.ReLU):
+            handle = module.register_forward_hook(hook)
+            hooks.append(handle)
+
+    # Forward pass through the model
+    if flag == 'policy':
+        model(data.observations)
+    elif flag == 'value':
+        model(data.observations, data.actions)
+    else:
+        raise ValueError("Invalid flag. Use 'policy' or 'value'.")
+
+    # Calculate the s scores for each layer
+    for name, module in model.named_modules():
+        if isinstance(module, torch.nn.ReLU):
+            layer_activations = activations[module]
+            s_scores = layer_activations / (torch.mean(layer_activations, axis=1, keepdim=True) + 1e-6)
+            s_scores = torch.mean(s_scores, axis=0)
+            s_scores_dict[name] = s_scores
+
+    # Remove the hooks to prevent memory leaks
+    for handle in hooks:
+        handle.remove()
+
+    return s_scores_dict
+
+def reinitialize_weights(module, reset_mask, next_module):
+    """
+    Reinitializes weights and biases of a module based on a reset mask.
+
+    Args:
+        module (torch.nn.Module): The module whose weights are to be reinitialized.
+        reset_mask (torch.Tensor): A boolean tensor indicating which weights to reset.
+    """
+    # Reinitialize weights
+    new_weights = torch.empty_like(module.weight.data)
+    torch.nn.init.orthogonal_(new_weights, np.sqrt(2))
+    module.weight.data[reset_mask] = new_weights[reset_mask].to(module.weight.device)
+
+    # Set outgoing weights to zero for reset neurons
+    if type(module) == type(next_module):
+        next_module.weight.data[:, reset_mask] = 0.0
+"""------------------------Plasticine------------------------"""
 
 
 if __name__ == "__main__":
@@ -196,7 +299,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_redo_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -341,6 +444,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+
+            """------------------------Plasticine------------------------"""
+            # ReDo operation
+            if global_step % args.redo_frequency == 0:
+                redo_reset(actor, data, args.redo_tau, flag='policy')
+                redo_reset(qf1, data, args.redo_tau, flag='value')
+                redo_reset(qf2, data, args.redo_tau, flag='value')
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

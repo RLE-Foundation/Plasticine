@@ -38,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -103,13 +103,17 @@ class QNetwork(nn.Module):
         self.value = self.gen_value()
     
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
+            nn.LayerNorm(256), # added layer norm
             nn.ReLU(),
             nn.Linear(256, 256),
+            nn.LayerNorm(256), # added layer norm
             nn.ReLU(),
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_value(self):
         return nn.Linear(256, 1)
@@ -151,13 +155,17 @@ class Actor(nn.Module):
         )
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
+            nn.LayerNorm(256), # added layer norm
             nn.ReLU(),
             nn.Linear(256, 256),
+            nn.LayerNorm(256), # added layer norm
             nn.ReLU(),
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_policy(self):
         return nn.Linear(256, self.action_dim)
@@ -196,7 +204,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_ln_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",

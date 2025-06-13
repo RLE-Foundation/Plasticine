@@ -1,5 +1,5 @@
 import os
-os.environ["MUJOCO_GL"] = "egl"
+os.environ['MUJOCO_GL'] = 'egl'
 import random
 import time
 from dataclasses import dataclass
@@ -25,6 +25,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 save_model_state
                                 )
 from plasticine.dmc_wrappers import ContinualDMC
+from plasticine.trac import start_trac
 
 @dataclass
 class Args:
@@ -38,7 +39,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +53,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -196,7 +197,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_trac_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -233,7 +234,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
+    """------------------------Plasticine------------------------"""
+    # TRAC setup
+    optimizer = start_trac(f'{log_dir}/{run_name}/trac_value.text', q_optimizer)(
+        list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
+    # TRAC setup
+    optimizer = start_trac(f'{log_dir}/{run_name}/trac_policy.text', actor_optimizer)(
+        actor.parameters(), lr=args.learning_rate)
+    """------------------------Plasticine------------------------"""
 
     # save the initial state of the model
     actor_copy = save_model_state(actor)
@@ -261,7 +270,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             obs, _ = envs.reset(seed=args.seed)
             print(f"step: {global_step}, switched to the next environment:", envs.env_id)
         """------------------------Plasticine------------------------"""
-
+        
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])

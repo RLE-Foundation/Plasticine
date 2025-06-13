@@ -13,6 +13,7 @@ import torch.optim as optim
 import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
+from copy import deepcopy
 
 from plasticine.metrics import (compute_dormant_units, 
                                 compute_active_units,
@@ -38,7 +39,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +53,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -90,7 +91,11 @@ class Args:
     """the number of rounds for the continual learning task"""
     num_steps_per_round: int = 1000000
     """the number of steps per round"""
+    # Arguments for the Regenerative Regularization (RR)
+    rr_weight: float = 0.01
+    """the weight of the regenerative regularization loss"""
     """------------------------Plasticine------------------------"""
+
 
 
 # ALGO LOGIC: initialize agent here:
@@ -196,7 +201,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_rr_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -226,6 +231,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     actor = Actor(envs).to(device)
     qf1 = QNetwork(envs).to(device)
     qf2 = QNetwork(envs).to(device)
+
+    # save the initial state of the model
+    init_actor = deepcopy(actor)
+    init_qf1 = deepcopy(qf1)
+    init_qf2 = deepcopy(qf2)
+
     qf1_target = QNetwork(envs).to(device)
     qf2_target = QNetwork(envs).to(device)
     target_actor = Actor(envs).to(device)
@@ -261,7 +272,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             obs, _ = envs.reset(seed=args.seed)
             print(f"step: {global_step}, switched to the next environment:", envs.env_id)
         """------------------------Plasticine------------------------"""
-
+        
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
@@ -315,6 +326,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
             qf_loss = qf1_loss + qf2_loss
 
+            """------------------------Plasticine------------------------"""
+            # Regenerative Regularization
+            params = torch.cat([p.view(-1) for p in qf1.parameters()] + [p.view(-1) for p in qf2.parameters()])
+            params_0 = torch.cat([p.view(-1) for p in init_qf1.parameters()] + [p.view(-1) for p in init_qf2.parameters()])
+            qf_l2 = torch.norm(params - params_0.detach(), 2)
+            qf_loss += args.rr_weight * qf_l2
+            """------------------------Plasticine------------------------"""
+
             # optimize the model
             q_optimizer.zero_grad()
             qf_loss.backward()
@@ -326,6 +345,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             if global_step % args.policy_frequency == 0:
                 actor_loss = -qf1(data.observations, actor(data.observations)).mean()
+                
+                """------------------------Plasticine------------------------"""
+                # Regenerative Regularization
+                params = torch.cat([p.view(-1) for p in actor.parameters()])
+                params_0 = torch.cat([p.view(-1) for p in init_actor.parameters()])
+                actor_l2 = torch.norm(params - params_0.detach(), 2)
+                actor_loss += args.rr_weight * actor_l2
+                """------------------------Plasticine------------------------"""
+                
                 actor_optimizer.zero_grad()
                 actor_loss.backward()
                 actor_optimizer.step()

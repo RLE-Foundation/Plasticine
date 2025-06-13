@@ -24,6 +24,8 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.procgen_wrappers import ContinualProcgen
+
 
 @dataclass
 class Args:
@@ -45,10 +47,10 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "starpilot"
-    """the id of the environment"""
-    total_timesteps: int = int(25e6)
-    """total timesteps of the experiments"""
+    # env_id: str = "starpilot"
+    # """the id of the environment"""
+    # total_timesteps: int = int(25e6)
+    # """total timesteps of the experiments"""
     learning_rate: float = 5e-4
     """the learning rate of the optimizer"""
     num_envs: int = 64
@@ -89,6 +91,14 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
     """------------------------Plasticine------------------------"""
+    cont_mode: str = "level"
+    """the mode of the continual learning task, `level` or `task`"""
+    num_rounds: int = 10
+    """the number of rounds for the continual learning task"""
+    num_episodes_per_round: int = 100
+    """the number of episodes per round"""
+    level_offset: int = 5
+    """the level offset for the `level` mode"""
     # Arguments for the Parseval Regularization (PR)
     parseval_lambda: float = 1e-3
     """the strength of the Parseval Regularization"""
@@ -265,8 +275,10 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    # args.num_iterations = args.total_timesteps // args.batch_size
+    args.num_iterations = args.num_rounds * args.num_episodes_per_round
+    run_name = f"{args.cont_mode}__{args.exp_name}__{args.seed}__{int(time.time())}"
+
     if args.track:
         import wandb
 
@@ -279,7 +291,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'std_ppo_procgen_pr_runs'
+    log_dir = 'cont_ppo_procgen_pr_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -294,18 +306,20 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
+    """------------------------Plasticine------------------------"""
     # env setup
-    envs = ProcgenEnv(num_envs=args.num_envs, env_name=args.env_id, num_levels=0, start_level=0, distribution_mode="easy")
-    envs = gym.wrappers.TransformObservation(envs, lambda obs: obs["rgb"])
-    envs.single_action_space = envs.action_space
-    envs.single_observation_space = envs.observation_space["rgb"]
-    envs.is_vector_env = True
-    envs = gym.wrappers.RecordEpisodeStatistics(envs)
-    if args.capture_video:
-        envs = gym.wrappers.RecordVideo(envs, f"videos/{run_name}")
-    envs = gym.wrappers.NormalizeReward(envs, gamma=args.gamma)
-    envs = gym.wrappers.TransformReward(envs, lambda reward: np.clip(reward, -10, 10))
-    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+    env_ids = ['bigfish', 'caveflyer', 'dodgeball', 'miner', 'starpilot']
+    envs = ContinualProcgen(
+        env_ids=env_ids,
+        num_envs=args.num_envs,
+        mode=args.cont_mode,
+        level_offset=args.level_offset,
+        gamma=args.gamma,
+    )
+    # connect all the env_ids to a string
+    env_ids = '-'.join(env_ids)
+    writer.add_text("env_ids", env_ids)
+    """------------------------Plasticine------------------------"""
 
     agent = Agent(envs, args.parseval_lambda, args.parseval_s).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
@@ -325,6 +339,17 @@ if __name__ == "__main__":
     next_done = torch.zeros(args.num_envs).to(device)
 
     for iteration in range(1, args.num_iterations + 1):
+        """------------------------Plasticine------------------------"""
+        # shift the environment
+        if (iteration - 1) % args.num_episodes_per_round == 0:
+            # shift the environment
+            envs.shift()
+            # reset the environment
+            next_obs = torch.Tensor(envs.reset()).to(device)
+            next_done = torch.zeros(args.num_envs).to(device)
+            print(f"iteration: {iteration}, env_id: {envs.env_id}, current_level: {envs.current_level}")
+        """------------------------Plasticine------------------------"""
+        
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations

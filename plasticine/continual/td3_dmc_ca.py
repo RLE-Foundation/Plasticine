@@ -25,6 +25,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 save_model_state
                                 )
 from plasticine.dmc_wrappers import ContinualDMC
+from plasticine.utils import CReLU4Linear
 
 @dataclass
 class Args:
@@ -38,7 +39,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +53,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -93,6 +94,7 @@ class Args:
     """------------------------Plasticine------------------------"""
 
 
+
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
     def __init__(self, env):
@@ -103,16 +105,18 @@ class QNetwork(nn.Module):
         self.value = self.gen_value()
     
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
+            CReLU4Linear(), # CReLU4Linear will double the output size
+            nn.Linear(256*2, 256),
+            CReLU4Linear(), # CReLU4Linear will double the output size
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_value(self):
-        return nn.Linear(256, 1)
+        return nn.Linear(256*2, 1)
 
     def forward(self, x, a):
         x = torch.cat([x, a], 1)
@@ -151,16 +155,18 @@ class Actor(nn.Module):
         )
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
             nn.Linear(self.input_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
+            CReLU4Linear(), # CReLU4Linear will double the output size
+            nn.Linear(256*2, 256),
+            CReLU4Linear(), # CReLU4Linear will double the output size
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_policy(self):
-        return nn.Linear(256, self.action_dim)
+        return nn.Linear(256*2, self.action_dim)
     
     def forward(self, x):
         x = self.policy_encoder(x)
@@ -196,7 +202,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_ca_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",

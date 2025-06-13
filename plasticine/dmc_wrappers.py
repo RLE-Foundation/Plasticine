@@ -139,7 +139,7 @@ class ContinualDMC:
 
     Args:
         env_ids (list): List of environment IDs.
-        mode (str): Mode of the environment ('dynamic' or 'task').
+        mode (str): Mode of the environment ('dynamics' or 'task').
         num_envs (int): Number of environments to run in parallel.
         seed (int): Random seed for the environment.
         capture_video (bool): Whether to capture video of the environment.
@@ -164,7 +164,7 @@ class ContinualDMC:
         self.run_name = run_name
 
         if len(self.env_ids) == 1:
-            assert mode == 'dynamic', "Dynamic mode only works with a single environment!"
+            assert mode == 'dynamics', "Dynamics mode only works with a single environment!"
             self.current_env_id = env_ids[0]
             self.envs = self.build_env()
 
@@ -179,6 +179,11 @@ class ContinualDMC:
             self.round_step = 0
             assert len(self.env_ids) >= 5, "Task mode must have multiple environments!"
             self.envs = self.build_env()
+        
+        self.observation_space = self.envs.observation_space
+        self.action_space = self.envs.action_space
+        self.single_observation_space = self.envs.single_observation_space
+        self.single_action_space = self.envs.single_action_space
     
     def build_env(self, xml_path=None):
         def make_env(env_id, seed, idx, capture_video, run_name):
@@ -202,8 +207,8 @@ class ContinualDMC:
 
         return envs
 
-    def reset(self):
-        return self.envs.reset()
+    def reset(self, seed):
+        return self.envs.reset(seed=seed)
 
     def step(self, actions):
         return self.envs.step(actions)
@@ -234,4 +239,4 @@ class ContinualDMC:
         """
         Generate the xml file for the environment.
         """
-        c
+        pass

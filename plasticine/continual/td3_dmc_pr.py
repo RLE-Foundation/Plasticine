@@ -38,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -90,26 +90,71 @@ class Args:
     """the number of rounds for the continual learning task"""
     num_steps_per_round: int = 1000000
     """the number of steps per round"""
+    # Arguments for the Parseval Regularization (RR)
+    parseval_lambda: float = 1e-3
+    """the strength of the Parseval Regularization"""
+    parseval_s: float = 1.0
+    """the scaling factor of the Parseval Regularization"""
     """------------------------Plasticine------------------------"""
 
 
+"""------------------------Plasticine------------------------"""
+class ParsevalLinear(nn.Linear):
+    """
+    Linear layer with Parseval regularization.
+    
+    Args:
+        Same as nn.Linear plus:
+        lambda_reg (float): Regularization strength
+        s (float): Target scale for singular values
+    """
+    def __init__(self, in_features, out_features, bias=True, lambda_reg=1e-3, s=1.0):
+        super().__init__(in_features, out_features, bias)
+        self.lambda_reg = lambda_reg
+        self.s = s
+        
+    def parseval_loss(self):
+        """
+        Computes the Parseval regularization loss for this layer's weight matrix.
+        """
+        # Skip if not training or regularization is disabled
+        if not self.training or self.lambda_reg <= 0:
+            return torch.tensor(0.0, device=self.weight.device)
+            
+        # Compute WW^T
+        wwt = torch.mm(self.weight, self.weight.t())
+        
+        # Target is s*I
+        target = self.s * torch.eye(wwt.shape[0], device=self.weight.device)
+        
+        # Frobenius norm squared of difference
+        loss = torch.square(torch.norm(wwt - target, p='fro'))
+        
+        return self.lambda_reg * loss
+"""------------------------Plasticine------------------------"""
+
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, parseval_lambda, parseval_s):
         super().__init__()
         self.input_dim = np.array(env.single_observation_space.shape).prod() + \
             np.prod(env.single_action_space.shape)
         self.value_encoder = self.gen_encoder()
         self.value = self.gen_value()
+
+        self.parseval_lambda = parseval_lambda
+        self.parseval_s = parseval_s
     
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
-            nn.Linear(self.input_dim, 256),
+            ParsevalLinear(self.input_dim, 256, self.parseval_lambda, self.parseval_s),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            ParsevalLinear(256, 256, self.parseval_lambda, self.parseval_s),
             nn.ReLU(),
         )
         return enc
+    """------------------------Plasticine------------------------"""
     
     def gen_value(self):
         return nn.Linear(256, 1)
@@ -124,15 +169,33 @@ class QNetwork(nn.Module):
         x = torch.cat([x, a], 1)
         x = self.value_encoder(x)
         return x
-
+    
+    """------------------------Plasticine------------------------"""
+    def parseval_regularization_loss(self):
+        """
+        Compute total Parseval regularization loss across all applicable layers.
+        """
+        total_loss = torch.tensor(0.0, device=next(self.parameters()).device)
+        
+        # Check all modules in policy and value encoders
+        for module in [self.value_encoder]:
+            for layer in module:
+                if isinstance(layer, ParsevalLinear):
+                    total_loss = total_loss + layer.parseval_loss()
+                    
+        return total_loss
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, parseval_lambda, parseval_s):
         super().__init__()
         self.input_dim = np.array(env.single_observation_space.shape).prod()
         self.action_dim = np.prod(env.single_action_space.shape)
         self.policy_encoder = self.gen_encoder()
         self.policy = self.gen_policy()
+
+        self.parseval_lambda = parseval_lambda
+        self.parseval_s = parseval_s
 
         # action rescaling
         self.register_buffer(
@@ -151,13 +214,15 @@ class Actor(nn.Module):
         )
 
     def gen_encoder(self):
+        """------------------------Plasticine------------------------"""
         enc = nn.Sequential(
-            nn.Linear(self.input_dim, 256),
+            ParsevalLinear(self.input_dim, 256, self.parseval_lambda, self.parseval_s),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            ParsevalLinear(256, 256, self.parseval_lambda, self.parseval_s),
             nn.ReLU(),
         )
         return enc
+        """------------------------Plasticine------------------------"""
     
     def gen_policy(self):
         return nn.Linear(256, self.action_dim)
@@ -170,7 +235,22 @@ class Actor(nn.Module):
     def get_features(self, x):
         x = self.policy_encoder(x)
         return x
-
+    
+    """------------------------Plasticine------------------------"""
+    def parseval_regularization_loss(self):
+        """
+        Compute total Parseval regularization loss across all applicable layers.
+        """
+        total_loss = torch.tensor(0.0, device=next(self.parameters()).device)
+        
+        # Check all modules in policy and value encoders
+        for module in [self.policy_encoder]:
+            for layer in module:
+                if isinstance(layer, ParsevalLinear):
+                    total_loss = total_loss + layer.parseval_loss()
+                    
+        return total_loss
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
@@ -196,7 +276,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_pr_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -315,6 +395,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
             qf_loss = qf1_loss + qf2_loss
 
+            """------------------------Plasticine------------------------"""
+            # add the Parseval Regularization loss
+            qf_loss += (qf1.parseval_regularization_loss() + qf2.parseval_regularization_loss())
+            """------------------------Plasticine------------------------"""
+
             # optimize the model
             q_optimizer.zero_grad()
             qf_loss.backward()
@@ -326,6 +411,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             if global_step % args.policy_frequency == 0:
                 actor_loss = -qf1(data.observations, actor(data.observations)).mean()
+
+                """------------------------Plasticine------------------------"""
+                # add the Parseval Regularization loss
+                actor_loss += actor.parseval_regularization_loss()
+                """------------------------Plasticine------------------------"""
+
                 actor_optimizer.zero_grad()
                 actor_loss.backward()
                 actor_optimizer.step()

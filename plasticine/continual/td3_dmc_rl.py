@@ -38,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -90,7 +90,13 @@ class Args:
     """the number of rounds for the continual learning task"""
     num_steps_per_round: int = 1000000
     """the number of steps per round"""
+    # Arguments for resetting the layers
+    reset_type: str = 'final'
+    """the type of resetting layer, can be 'final' or 'all'"""
+    reset_frequency: int = 1000
+    """the frequency of resetting layer"""
     """------------------------Plasticine------------------------"""
+
 
 
 # ALGO LOGIC: initialize agent here:
@@ -124,7 +130,33 @@ class QNetwork(nn.Module):
         x = torch.cat([x, a], 1)
         x = self.value_encoder(x)
         return x
+    
+    """------------------------Plasticine------------------------"""
+    def shrink_perturb(self, reset_type):
+        shrink_p, perturb_p = 0.0, 1.0
+        if reset_type == 'final':
+            shrink_encoder, shrink_value, shrink_policy = False, True, True
+        elif reset_type == 'all':
+            shrink_encoder, shrink_value, shrink_policy = True, True, True
+        else:
+            raise NotImplementedError(f"reset_type {reset_type} not implemented")
+        # shrink the encoder
+        if shrink_encoder:
+            new_value_enc = self.gen_encoder()
+            self.sp_module(self.value_encoder, new_value_enc, shrink_p, perturb_p)
+        
+        # shrink the value
+        if shrink_value:
+            new_value = self.gen_value()
+            self.sp_module(self.value, new_value, shrink_p, perturb_p)
 
+    def sp_module(self, current_module, init_module, shrink_factor, epsilon):
+        use_device = next(current_module.parameters()).device
+        init_params = list(init_module.to(use_device).parameters())
+        for idx, current_param in enumerate(current_module.parameters()):
+            current_param.data *= shrink_factor
+            current_param.data += epsilon * init_params[idx].data
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -170,7 +202,33 @@ class Actor(nn.Module):
     def get_features(self, x):
         x = self.policy_encoder(x)
         return x
+    
+    """------------------------Plasticine------------------------"""
+    def shrink_perturb(self, reset_type):
+        shrink_p, perturb_p = 0.0, 1.0
+        if reset_type == 'final':
+            shrink_encoder, shrink_value, shrink_policy = False, True, True
+        elif reset_type == 'all':
+            shrink_encoder, shrink_value, shrink_policy = True, True, True
+        else:
+            raise NotImplementedError(f"reset_type {reset_type} not implemented")
+        
+        # shrink the encoder
+        if shrink_encoder:
+            new_policy_enc = self.gen_encoder()
+            self.sp_module(self.policy_encoder, new_policy_enc, shrink_p, perturb_p)
+        if shrink_policy:
+            # shrink the policy
+            new_policy = self.gen_policy()
+            self.sp_module(self.policy, new_policy, shrink_p, perturb_p)
 
+    def sp_module(self, current_module, init_module, shrink_factor, epsilon):
+        use_device = next(current_module.parameters()).device
+        init_params = list(init_module.to(use_device).parameters())
+        for idx, current_param in enumerate(current_module.parameters()):
+            current_param.data *= shrink_factor
+            current_param.data += epsilon * init_params[idx].data
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
@@ -196,7 +254,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_rl_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -341,6 +399,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+            
+            """------------------------Plasticine------------------------"""
+            # reset the layers
+            if global_step % args.reset_frequency == 0:
+                actor.shrink_perturb(args.reset_type)
+                qf1.shrink_perturb(args.reset_type)
+                qf2.shrink_perturb(args.reset_type)
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

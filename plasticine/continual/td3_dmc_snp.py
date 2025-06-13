@@ -1,5 +1,5 @@
 import os
-os.environ["MUJOCO_GL"] = "egl"
+os.environ['MUJOCO_GL'] = 'egl'
 import random
 import time
 from dataclasses import dataclass
@@ -38,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -90,6 +90,9 @@ class Args:
     """the number of rounds for the continual learning task"""
     num_steps_per_round: int = 1000000
     """the number of steps per round"""
+    # Arguments for the shrink and perturb (SnP) method
+    sp_coefficient: float = 0.999999
+    """p_new = sp_coefficient * p_current + (1 - sp_coefficient) * p_init"""
     """------------------------Plasticine------------------------"""
 
 
@@ -124,7 +127,24 @@ class QNetwork(nn.Module):
         x = torch.cat([x, a], 1)
         x = self.value_encoder(x)
         return x
+    
+    """------------------------Plasticine------------------------"""
+    def shrink_perturb(self, shrink_p):
+        perturb_p = 1.0 - shrink_p
+        # shrink the encoder
+        new_value_enc = self.gen_encoder()
+        self.sp_module(self.value_encoder, new_value_enc, shrink_p, perturb_p)
+        # shrink the value
+        new_value = self.gen_value()
+        self.sp_module(self.value, new_value, shrink_p, perturb_p)
 
+    def sp_module(self, current_module, init_module, shrink_factor, epsilon):
+        use_device = next(current_module.parameters()).device
+        init_params = list(init_module.to(use_device).parameters())
+        for idx, current_param in enumerate(current_module.parameters()):
+            current_param.data *= shrink_factor
+            current_param.data += epsilon * init_params[idx].data
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -170,7 +190,24 @@ class Actor(nn.Module):
     def get_features(self, x):
         x = self.policy_encoder(x)
         return x
+    
+    """------------------------Plasticine------------------------"""
+    def shrink_perturb(self, shrink_p):
+        perturb_p = 1.0 - shrink_p
+        # shrink the encoder
+        new_policy_enc = self.gen_encoder()
+        self.sp_module(self.policy_encoder, new_policy_enc, shrink_p, perturb_p)
+        # shrink the policy
+        new_policy = self.gen_policy()
+        self.sp_module(self.policy, new_policy, shrink_p, perturb_p)
 
+    def sp_module(self, current_module, init_module, shrink_factor, epsilon):
+        use_device = next(current_module.parameters()).device
+        init_params = list(init_module.to(use_device).parameters())
+        for idx, current_param in enumerate(current_module.parameters()):
+            current_param.data *= shrink_factor
+            current_param.data += epsilon * init_params[idx].data
+    """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
     import stable_baselines3 as sb3
@@ -196,7 +233,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_snp_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -330,6 +367,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actor_loss.backward()
                 actor_optimizer.step()
 
+                """------------------------Plasticine------------------------"""
+                # shrink and perturb (step level)
+                actor.shrink_perturb(args.sp_coefficient)
+                qf1.shrink_perturb(args.sp_coefficient)
+                qf2.shrink_perturb(args.sp_coefficient)
+                """------------------------Plasticine------------------------"""
+
                 # get the actor gradient norm but don't clip it
                 actor_grad_norm = torch.nn.utils.clip_grad_norm_(actor.parameters(), 1e10)
                 writer.add_scalar("plasticity/policy_grad_norm", actor_grad_norm.item(), global_step)
@@ -341,7 +385,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-
+            
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:
                 eval_data = rb.sample(args.plasticity_eval_size)

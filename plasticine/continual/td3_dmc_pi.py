@@ -13,6 +13,7 @@ import torch.optim as optim
 import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
+from copy import deepcopy
 
 from plasticine.metrics import (compute_dormant_units, 
                                 compute_active_units,
@@ -38,7 +39,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +53,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -92,6 +93,30 @@ class Args:
     """the number of steps per round"""
     """------------------------Plasticine------------------------"""
 
+"""------------------------Plasticine------------------------"""
+class Injector(nn.Module):
+    def __init__(self, original, in_size=256, out_size=10):
+        super(Injector, self).__init__()
+        if type(original) == nn.Linear:
+            self.original = original
+        elif type(original) == Injector:
+            self.original = nn.Linear(in_size, out_size)
+            aw = original.original.weight
+            bw = original.new_a.weight
+            cw = original.new_b.weight
+            self.original.weight = nn.Parameter(aw + bw - cw)
+            ab = original.original.bias
+            bb = original.new_a.bias
+            cb = original.new_b.bias
+            self.original.bias = nn.Parameter(ab + bb - cb)
+        else:
+            raise NotImplementedError
+        self.new_a = nn.Linear(in_size, out_size)
+        self.new_b = deepcopy(self.new_a)
+
+    def forward(self, x):
+        return self.original(x) + self.new_a(x) - self.new_b(x).detach()
+"""------------------------Plasticine------------------------"""
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
@@ -124,7 +149,12 @@ class QNetwork(nn.Module):
         x = torch.cat([x, a], 1)
         x = self.value_encoder(x)
         return x
-
+    
+    """------------------------Plasticine------------------------"""
+    def inject(self):
+        self.value = Injector(self.value, 256, 1)
+        self.value.to(next(self.parameters()).device)
+    """------------------------Plasticine------------------------"""
 
 class Actor(nn.Module):
     def __init__(self, env):
@@ -170,6 +200,12 @@ class Actor(nn.Module):
     def get_features(self, x):
         x = self.policy_encoder(x)
         return x
+    
+    """------------------------Plasticine------------------------"""
+    def inject(self):
+        self.policy = Injector(self.policy, 256, self.action_dim)
+        self.policy.to(next(self.parameters()).device)
+    """------------------------Plasticine------------------------"""
 
 
 if __name__ == "__main__":
@@ -196,7 +232,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_pi_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -341,6 +377,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+            
+            """------------------------Plasticine------------------------"""
+            # plasticity injection at the middle of training
+            if global_step % (args.total_timesteps // 2) == 0:
+                # inject plasticity
+                actor.inject()
+                qf1.inject()
+                qf2.inject()
+            """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
             if global_step % args.plasticity_eval_interval == 0:

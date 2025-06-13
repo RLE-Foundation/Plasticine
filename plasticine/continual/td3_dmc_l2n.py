@@ -38,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Plasticine"
+    wandb_project_name: str = "cleanRL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -52,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    # env_id: str = "quadruped_walk"
+    # env_id: str = "Hopper-v4"
     # """the id of the environment"""
     # total_timesteps: int = 1000000
     # """total timesteps of the experiments"""
@@ -90,6 +90,9 @@ class Args:
     """the number of rounds for the continual learning task"""
     num_steps_per_round: int = 1000000
     """the number of steps per round"""
+    # l2 norm arguments
+    weight_decay: float = 1e-3
+    """the weight decay coefficient"""
     """------------------------Plasticine------------------------"""
 
 
@@ -196,7 +199,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    log_dir = 'cont_td3_dmc_vanilla_runs'
+    log_dir = 'cont_td3_dmc_l2n_runs'
     writer = SummaryWriter(f"{log_dir}/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -232,8 +235,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     target_actor.load_state_dict(actor.state_dict())
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
-    q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
-    actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
+    
+    """------------------------Plasticine------------------------"""
+    q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate, weight_decay=args.weight_decay)
+    actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate, weight_decay=args.weight_decay)
+    """------------------------Plasticine------------------------"""
 
     # save the initial state of the model
     actor_copy = save_model_state(actor)
