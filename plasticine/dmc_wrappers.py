@@ -215,7 +215,7 @@ class ContinualDMC:
         return self.envs.step(actions)
 
     def shift(self):
-        if self.mode == 'dynamic':
+        if self.mode == 'dynamics':
             # for each round, change the dynamic (coefficient of friction)
             old_file = os.path.join(os.path.dirname(suite.__file__), 'quadruped.xml')
             tree = ET.parse(old_file)
