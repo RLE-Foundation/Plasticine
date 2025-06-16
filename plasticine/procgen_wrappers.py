@@ -35,8 +35,8 @@ class ContinualProcgen:
         self.gamma = gamma
         self.shuffle = shuffle
 
-        if len(self.env_ids) == 1:
-            assert mode == 'level', "Level mode only works with a single environment!"
+        if mode == 'level':
+            print("Level mode will select the first item in the `env_ids` list !!!")
             assert level_offset >= 0, "Levels offset must be non-negative!"
             self.env_id = env_ids[0]
             self.current_level = 0
