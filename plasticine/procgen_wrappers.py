@@ -15,6 +15,7 @@ class ContinualProcgen:
         mode (str): Mode of the environment ('level' or 'task').
         level_offset (int): Level offset for the environment.
         gamma (float): Discount factor for the environment.
+        shuffle (bool): Whether to shuffle of the environment IDs.
     
     Returns:
         None
@@ -25,12 +26,14 @@ class ContinualProcgen:
                  mode,
                  level_offset,
                  gamma,
+                 shuffle=False
                  ) -> None:
         self.env_ids = env_ids
         self.num_envs = num_envs
         self.mode = mode
         self.level_offset = level_offset
         self.gamma = gamma
+        self.shuffle = shuffle
 
         if len(self.env_ids) == 1:
             assert mode == 'level', "Level mode only works with a single environment!"
@@ -41,7 +44,8 @@ class ContinualProcgen:
 
         elif mode == 'task':
             # shuffle the env_ids
-            np.random.shuffle(self.env_ids)
+            if self.shuffle:
+                np.random.shuffle(self.env_ids)
             self.env_id = env_ids[0]
             self.num_tasks = len(env_ids)
             self.round_step = 0

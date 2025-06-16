@@ -144,6 +144,7 @@ class ContinualDMC:
         seed (int): Random seed for the environment.
         capture_video (bool): Whether to capture video of the environment.
         run_name (str): Name of the run for video capture.
+        shuffle (bool): Whether to shuffle of the environment IDs.
 
     Returns:
         None
@@ -154,7 +155,8 @@ class ContinualDMC:
                  num_envs=1,
                  seed=1,
                  capture_video=False, 
-                 run_name=''
+                 run_name='',
+                 shuffle=False
                  ) -> None:
         self.env_ids = env_ids
         self.mode = mode
@@ -162,6 +164,7 @@ class ContinualDMC:
         self.seed = seed
         self.capture_video = capture_video
         self.run_name = run_name
+        self.shuffle = shuffle
 
         if mode == 'dynamics':
             self.env_ids = ['quadruped_walk']
@@ -174,7 +177,8 @@ class ContinualDMC:
 
         elif mode == 'task':
             # shuffle the env_ids
-            np.random.shuffle(self.env_ids)
+            if self.shuffle:
+                np.random.shuffle(self.env_ids)
             self.current_env_id = env_ids[0]
             self.num_tasks = len(env_ids)
             self.round_step = 0
