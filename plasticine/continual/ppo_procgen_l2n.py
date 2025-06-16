@@ -90,6 +90,14 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
     """------------------------Plasticine------------------------"""
+    cont_mode: str = "level"
+    """the mode of the continual learning task, `level` or `task`"""
+    num_rounds: int = 10
+    """the number of rounds for the continual learning task"""
+    num_episodes_per_round: int = 100
+    """the number of episodes per round"""
+    level_offset: int = 5
+    """the level offset for the `level` mode"""
     # Arguments for the L2 Normalization
     weight_decay: float = 1e-3
     """the weight decay coefficient"""
