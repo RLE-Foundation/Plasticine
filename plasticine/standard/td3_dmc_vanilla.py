@@ -1,5 +1,5 @@
-# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/td3/#td3_continuous_actionpy
 import os
+os.environ["MUJOCO_GL"] = "egl"
 import random
 import time
 from dataclasses import dataclass
@@ -24,6 +24,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.dmc_wrappers import StandardDMC
 
 @dataclass
 class Args:
@@ -37,7 +38,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "cleanRL"
+    wandb_project_name: str = "Plasticine"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -51,7 +52,7 @@ class Args:
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    env_id: str = "Hopper-v4"
+    env_id: str = "quadruped_walk"
     """the id of the environment"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -86,13 +87,13 @@ class Args:
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
+        domain, task = env_id.split("_")
         if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
+            env = StandardDMC(domain, task, task_kwargs={"random": seed})
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
-            env = gym.make(env_id)
+            env = StandardDMC(domain, task, task_kwargs={"random": seed})
         env = gym.wrappers.RecordEpisodeStatistics(env)
-        env.action_space.seed(seed)
         return env
 
     return thunk

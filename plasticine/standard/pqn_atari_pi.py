@@ -23,7 +23,7 @@ from plasticine.metrics import (compute_active_units,
                                 compute_feature_norm, 
                                 compute_feature_variance,
                                 compute_weight_magnitude, 
-                                compute_l2_norm_difference, 
+                                # compute_l2_norm_difference, 
                                 save_model_state
                                 )
 
@@ -168,25 +168,50 @@ class QNetwork(nn.Module):
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
-        if type(original) == nn.Linear:
-            self.original = original
-        elif type(original) == Injector:
-            self.original = nn.Linear(in_size, out_size)
-            aw = original.original.weight
-            bw = original.new_a.weight
-            cw = original.new_b.weight
-            self.original.weight = nn.Parameter(aw + bw - cw)
-            ab = original.original.bias
-            bb = original.new_a.bias
-            cb = original.new_b.bias
-            self.original.bias = nn.Parameter(ab + bb - cb)
-        else:
-            raise NotImplementedError
+        self.original = original
         self.new_a = nn.Linear(in_size, out_size)
         self.new_b = deepcopy(self.new_a)
 
     def forward(self, x):
         return self.original(x) + self.new_a(x) - self.new_b(x).detach()
+
+def compute_l2_norm_difference(current_model, prev_model_state, pi_done = False) -> torch.Tensor:
+    """
+    Compute the L2 norm difference between the current model and the previous model state (only for plasticity injection).
+    This is used to measure the change in model parameters.
+
+    Args:
+        current_model (torch.nn.Module): The current model.
+        prev_model_state (Dict): The previous model state.
+        pi_done (bool, optional): Whether the plasticity injection is done. Defaults to False.
+
+    Returns:
+        torch.Tensor: The L2 norm difference between the current model and the previous model state.
+    """
+    l2_diff = 0.0
+    num_params = 0
+
+    if not pi_done:
+        for name, param in current_model.named_parameters():
+            param_diff = param - prev_model_state[name]
+            l2_diff += torch.sum(param_diff**2)
+            num_params += param.numel()
+    else:
+        for name, param in current_model.named_parameters():
+            if 'value' in name:
+                continue
+            param_diff = param - prev_model_state[name]
+            l2_diff += torch.sum(param_diff**2)
+            num_params += param.numel()
+
+        # compute the diff of the policy and value layers separately
+        value_w_diff = (current_model.value.original.weight + current_model.value.new_a.weight - current_model.value.new_b.weight) - prev_model_state['value.weight']
+        value_b_diff = (current_model.value.original.bias + current_model.value.new_a.bias - current_model.value.new_b.bias) - prev_model_state['value.bias']
+
+        l2_diff += torch.sum(value_w_diff**2) + torch.sum(value_b_diff**2)
+        num_params += prev_model_state['value.weight'].numel() + prev_model_state['value.bias'].numel()
+
+    return torch.sqrt(torch.Tensor(l2_diff) / num_params)
 """------------------------Plasticine------------------------"""
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
@@ -261,6 +286,7 @@ if __name__ == "__main__":
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
+    pi_done = False
     for iteration in range(1, args.num_iterations + 1):
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
@@ -345,6 +371,7 @@ if __name__ == "__main__":
         if iteration % (args.num_iterations // 2) == 0:
             # inject plasticity
             q_network.inject()
+            pi_done = True
         """------------------------Plasticine------------------------"""
 
         # compute plasticity metrics
@@ -357,7 +384,7 @@ if __name__ == "__main__":
                     "feature_variance": compute_feature_variance(features),
                     "feature_norm": compute_feature_norm(features),
                     "weight_magnitude": compute_weight_magnitude(q_network),
-                    "l2_norm_difference": compute_l2_norm_difference(q_network, q_network_copy),
+                    "l2_norm_difference": compute_l2_norm_difference(q_network, q_network_copy, pi_done),
                     "active_units": compute_active_units(features, 'relu'),
                     "dormant_units": compute_dormant_units(q_network, b_obs, 'relu', 0.025),
                     "grad_norm": np.mean(total_grad_norm)

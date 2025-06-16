@@ -1,26 +1,24 @@
 <div align=center>
 <p align="center"><img align="center" width="500px" src="assets/logo.png"></p>
 
-## Plasticine: Clean Plasticity Optimization in Deep Reinforcement Learning
-<img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> <a href="https://discord.gg/swMV6kgV">
-  <img src="https://img.shields.io/badge/Discussion-Discord-5562EA" alt="Discussion Discord">
+## Plasticine: Accelerating Research in Plasticity-Motivated Deep Reinforcement Learning
+<img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> <a href="https://discord.gg/YGApGaXAHW"><img src="https://img.shields.io/badge/Discussion-Discord-5562EA" alt="Discussion Discord"></a> <a href="https://arxiv.org/pdf/2504.17490"><img src="https://img.shields.io/badge/Paper-arXiv-b31b1b" alt="Paper"></a> 
 
-  ⚠️⚠️⚠️This project is undergoing fast development and iteration!!!⚠️⚠️⚠️
-</a> 
+⚠️⚠️⚠️This project is undergoing fast development and iteration!!!⚠️⚠️⚠️
 
 </div>
 
-**Plasticine** is a library that provides high-quality and single-file implementations of plasticity optimization algorithms in deep reinforcement learning. We highlight the features of **Plasticine** as follows:
+**Plasticine** is a library that provides high-quality and single-file implementations of plasticity loss mitigation methods in deep reinforcement learning. We highlight the features of **Plasticine** as follows:
 - 📜 Single-file implementation;
 - 🏞️ Support **standard**, **continual**, and **open-ended** RL Scenarios;
-- 📊 Benchmarked Implementation (13+ algorithms and 10+ plasticity metrics);
+- 📊 Benchmarked implementation (13+ algorithms and 10+ plasticity metrics);
 - 🧱 Easy combination of different strategies;
-- ⚙️ Local Reproducibility via Seeding;
-- 🧫 Experiment Management with [Weights and Biases]().
+- ⚙️ Local reproducibility via seeding;
+- 🧫 Experiment management with [Weights and Biases]().
 
 > **Plasticine** is built on the top of [CleanRL](https://github.com/vwxyzjn/cleanrl). Thanks for the excellent project!
 
-> Join the [Discord](https://discord.gg/swMV6kgV) channel for discussion!
+> Join the [Discord](https://discord.gg/YGApGaXAHW) channel for discussion!
 
 ## Quick Start
 - Create an environment and install the dependencies:
@@ -96,21 +94,44 @@ nn.Linear(512*2, 512),
 | [TRAC](https://arxiv.org/pdf/2405.16642)          | [PPO+Procgen](./plasticine/standard/ppo_procgen_trac.py),[PQN+Atari](./plasticine/standard/pqn_atari_trac.py),[TD3+DMC](./plasticine/standard/td3_dmc_trac.py) | [PPO+Procgen](./plasticine/continual/ppo_procgen_trac.py),[TD3+DMC](./plasticine/continual/td3_dmc_trac.py) | [PPO+Craftax](./plasticine/open/ppo_craftax_trac.py) |
 
 ### Evaluation Metrics
-|                            |     **Metric**    |                  |
-|:--------------------------:|:-----------------:|------------------|
-|   Ratio of Dormant Units   |   Effective Rank  |   Gradient Norm  |
-| Fraction of Active Units |  Weight Magnitude |   Feature Norm   |
-|         Stable Rank        | Weight Difference | Feature Variance |
-|       Policy Entropy       |                   |                  |
+|                          |                  |     **Metric**    |               |                  |
+|:------------------------:|:----------------:|:-----------------:|:-------------:|:----------------:|
+|  Ratio of Dormant Units  |    Stable Rank   |   Effective Rank  |  Feature Norm | Feature Variance |
+| Fraction of Active Units | Weight Magnitude | Weight Difference | Gradient Norm |  Policy Entropy  |
 
 The detailed formulation of these metrics can be found in the [Paper]().
+
+### Learning Scenarios
+#### Standard
+| <img src="assets/demon_attack.gif" style="height:150px;width: auto;"> | <img src="assets/bossfight.png" style="height:150px;width: auto;"> |<img src="assets/dog_run.png" style="height:150px;width: auto;"> | 
+|:-----------------------|:-----------------------|:-----------------------|
+|ALE|Procgen|DMC|
+
+#### Continual
+- Continual Procgen
+
+| ![cont_procgen_ls](assets/cont_procgen_ls.png) | ![cont_procgen_ts](assets/cont_procgen_ts.png) |
+|:-----------------------|:-----------------------|
+|**Level-Shift**: The same task with a sequentially-incremented `start_level` parameter for each round. |**Task-Shift**: Different tasks with a same `start_level` parameter for each round.|
+
+- Continual DMC
+
+| ![cont_dmc_ds](assets/cont_dmc_ds.png) | ![cont_dmc_ts](assets/cont_dmc_ts.png) |
+|:--|:--|
+|**Dynamic-Shift**: The same task with a sequentially and randomly-sampled `coefficient_of_friction` parameter for each round.|**Task-Shift**: Different tasks with a same `coefficient_of_friction` parameter for each round.|
+
+#### Open-ended
+| ![craftax_farming](assets/farming.gif) | ![craftax_mining](assets/mining.gif) |![craftax_archery](assets/archery.gif) | ![craftax_magic](assets/magic.gif) |
+|:-----------------------|:-----------------------|:-----------------------|:-----------------------|
+|Farming|Mining|Archery|Magic|
+
 
 ## Dataset
 ## Discussion and Contribution
 
 - For discussion and questions:
   + [GitHub issues](https://github.com/RLE-Foundation/Plasticine/issues)
-  + [Discord channel](https://discord.gg/swMV6kgV)
+  + [Discord channel](https://discord.gg/YGApGaXAHW)
 
 - For contribution:
   - Read the `CONTRIBUTING.md` before contributing to the project!
@@ -119,8 +140,8 @@ The detailed formulation of these metrics can be found in the [Paper]().
 If you use Plasticine in your work, please cite our paper:
 ``` bib
 @misc{yuan2025@plasticine,
-    author = {Mingqi Yuan and Qi Wang and Guozheng Ma and Bo Li and Xin Jin and Yunbo Wang and Xiaokang Yang and Wenjun Zeng},
-    title = {Plasticine: Clean Plasticity Optimization in Deep Reinforcement Learning},
+    author = {Mingqi Yuan and Qi Wang and Guozheng Ma and Bo Li and Xin Jin and Yunbo Wang and Xiaokang Yang and Wenjun Zeng and Dacheng Tao},
+    title = {Plasticine: Accelerating Research in Plasticity-Motivated Deep Reinforcement Learning},
     year = {2025},
     publisher = {GitHub},
     journal = {GitHub Repository},
@@ -129,4 +150,5 @@ If you use Plasticine in your work, please cite our paper:
 ```
 
 ## Acknowledgement
-<!-- This project is supported by [The Hong Kong Polytechnic University](http://www.polyu.edu.hk/), [Eastern Institute for Advanced Study](http://www.eias.ac.cn/), and [FLW-Foundation](FLW-Foundation). [EIAS HPC](https://hpc.eias.ac.cn/) provides a GPU computing platform, and [HUAWEI Ascend Community](https://www.hiascend.com/) provides an NPU computing platform for our testing. Some code of this project is borrowed or inspired by several excellent projects, and we highly appreciate them. See [ACKNOWLEDGMENT.md](https://github.com/RLE-Foundation/rllte/blob/main/ACKNOWLEDGMENT.md). -->
+
+This project is supported by [The Hong Kong Polytechnic University](http://www.polyu.edu.hk/), [Ningbo Institute of Digital Twin, Eastern Institute of Technology, Ningbo](https://idt.eitech.edu.cn/), [Shanghai Jiao Tong University](https://en.sjtu.edu.cn/), [Nanyang Technological University](https://www.ntu.edu.sg/), and [LimX Dynamics](https://limxdynamics.com/). We thank the high-performance computing center at Eastern Institute of Technology and Ningbo Institute of Digital Twin for providing the computing resources. Some code of this project is borrowed or inspired by several excellent projects, and we highly appreciate them.

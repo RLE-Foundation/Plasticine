@@ -85,7 +85,7 @@ def compute_active_units(features: torch.Tensor, activation: str) -> torch.Tenso
         torch.Tensor: The fraction of active units units.
     """
     assert features.ndim == 2, "features should be a 2D tensor"
-    assert features.size(0) > features.size(1), "batch_size should be greater than num_features"
+    assert features.size(0) >= features.size(1), "batch_size should be greater than num_features"
     if activation in ["ln-relu", "gn-relu", "relu", "crelu"]:
         return 1. - torch.mean((features == 0).float())
     elif activation == "tanh":
@@ -109,7 +109,7 @@ def compute_stable_rank(features: torch.Tensor) -> torch.Tensor:
         torch.Tensor: The stable rank of the features.
     """
     assert features.ndim == 2, "features should be a 2D tensor"
-    assert features.size(0) > features.size(1), "batch_size should be greater than num_features"
+    assert features.size(0) >= features.size(1), "batch_size should be greater than num_features"
     singular_values = torch.linalg.svdvals(features)
     cumsum_sorted_singular_values = torch.cumsum(singular_values, dim=-1) / torch.sum(singular_values)
     return torch.sum(cumsum_sorted_singular_values < 0.99) + 1
@@ -126,7 +126,7 @@ def compute_effective_rank(features: torch.Tensor) -> torch.Tensor:
         torch.Tensor: The effective rank of the features.
     """
     assert features.ndim == 2, "features should be a 2D tensor"
-    assert features.size(0) > features.size(1), "batch_size should be greater than num_features"
+    assert features.size(0) >= features.size(1), "batch_size should be greater than num_features"
     singular_values = torch.linalg.svdvals(features)
     probs = singular_values / torch.sum(torch.abs(singular_values))
     probs = probs[probs > 0]
@@ -145,7 +145,7 @@ def compute_feature_norm(features: torch.Tensor) -> torch.Tensor:
         torch.Tensor: The feature norm of the features.
     """
     assert features.ndim == 2, "features should be a 2D tensor"
-    assert features.size(0) > features.size(1), "batch_size should be greater than num_features"
+    assert features.size(0) >= features.size(1), "batch_size should be greater than num_features"
     return torch.mean(torch.norm(features, dim=1))
 
 
@@ -160,7 +160,7 @@ def compute_feature_variance(features: torch.Tensor) -> torch.Tensor:
         torch.Tensor: The feature variance of the features.
     """
     assert features.ndim == 2, "features should be a 2D tensor"
-    assert features.size(0) > features.size(1), "batch_size should be greater than num_features"
+    assert features.size(0) >= features.size(1), "batch_size should be greater than num_features"
     return torch.mean(torch.var(features, dim=1))
 
 

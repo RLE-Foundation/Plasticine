@@ -194,17 +194,17 @@ class Agent(nn.Module):
             conv_seq = ConvSequence(shape, out_channels)
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
+        """------------------------Plasticine------------------------"""
         conv_seqs += [
             nn.Flatten(),
             nn.ReLU(),
-            """------------------------Plasticine------------------------"""
             ParsevalLinear(in_features=shape[0] * shape[1] * shape[2], 
                            out_features=256,
                            lambda_reg=self.parseval_lambda,
                            s=self.parseval_s),
-            """------------------------Plasticine------------------------"""
             nn.ReLU(),
         ]
+        """------------------------Plasticine------------------------"""
         return nn.Sequential(*conv_seqs)
 
     def gen_policy(self):

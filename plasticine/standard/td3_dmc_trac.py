@@ -1,5 +1,5 @@
-# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/td3/#td3_continuous_actionpy
 import os
+os.environ['MUJOCO_GL'] = 'egl'
 import random
 import time
 from dataclasses import dataclass
@@ -24,6 +24,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_l2_norm_difference, 
                                 save_model_state
                                 )
+from plasticine.dmc_wrappers import StandardDMC
 from plasticine.trac import start_trac
 
 @dataclass
@@ -88,13 +89,13 @@ class Args:
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
+        domain, task = env_id.split("_")
         if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
+            env = StandardDMC(domain, task, task_kwargs={"random": seed})
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
-            env = gym.make(env_id)
+            env = StandardDMC(domain, task, task_kwargs={"random": seed})
         env = gym.wrappers.RecordEpisodeStatistics(env)
-        env.action_space.seed(seed)
         return env
 
     return thunk
@@ -233,14 +234,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     target_actor.load_state_dict(actor.state_dict())
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
-    q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
     """------------------------Plasticine------------------------"""
     # TRAC setup
-    optimizer = start_trac(f'{log_dir}/{run_name}/trac_value.text', q_optimizer)(
+    q_optimizer = start_trac(f'{log_dir}/{run_name}/trac_value.text', optim.Adam)(
         list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
-    actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
-    # TRAC setup
-    optimizer = start_trac(f'{log_dir}/{run_name}/trac_policy.text', actor_optimizer)(
+    actor_optimizer = start_trac(f'{log_dir}/{run_name}/trac_policy.text', optim.Adam)(
         actor.parameters(), lr=args.learning_rate)
     """------------------------Plasticine------------------------"""
 

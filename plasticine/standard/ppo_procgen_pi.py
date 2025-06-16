@@ -22,7 +22,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_feature_norm, 
                                 compute_feature_variance,
                                 compute_weight_magnitude, 
-                                compute_l2_norm_difference, 
+                                # compute_l2_norm_difference, 
                                 save_model_state
                                 )
 
@@ -199,35 +199,62 @@ class Agent(nn.Module):
 
     """------------------------Plasticine------------------------"""
     def inject(self):
-            self.policy = Injector(self.policy, 256, self.action_dim)
-            self.value = Injector(self.value, 256, 1)
-            self.policy.to(next(self.parameters()).device)
-            self.value.to(next(self.parameters()).device)
+        self.policy = Injector(self.policy, 256, self.action_dim)
+        self.value = Injector(self.value, 256, 1)
+        self.policy.to(next(self.parameters()).device)
+        self.value.to(next(self.parameters()).device)
     """------------------------Plasticine------------------------"""
 
 """------------------------Plasticine------------------------"""
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
-        if type(original) == nn.Linear:
-            self.original = original
-        elif type(original) == Injector:
-            self.original = nn.Linear(in_size, out_size)
-            aw = original.original.weight
-            bw = original.new_a.weight
-            cw = original.new_b.weight
-            self.original.weight = nn.Parameter(aw + bw - cw)
-            ab = original.original.bias
-            bb = original.new_a.bias
-            cb = original.new_b.bias
-            self.original.bias = nn.Parameter(ab + bb - cb)
-        else:
-            raise NotImplementedError
+        self.original = original
         self.new_a = nn.Linear(in_size, out_size)
         self.new_b = deepcopy(self.new_a)
 
     def forward(self, x):
         return self.original(x) + self.new_a(x) - self.new_b(x).detach()
+
+def compute_l2_norm_difference(current_model, prev_model_state, pi_done = False) -> torch.Tensor:
+    """
+    Compute the L2 norm difference between the current model and the previous model state (only for plasticity injection).
+    This is used to measure the change in model parameters.
+
+    Args:
+        current_model (torch.nn.Module): The current model.
+        prev_model_state (Dict): The previous model state.
+        pi_done (bool, optional): Whether the plasticity injection is done. Defaults to False.
+
+    Returns:
+        torch.Tensor: The L2 norm difference between the current model and the previous model state.
+    """
+    l2_diff = 0.0
+    num_params = 0
+
+    if not pi_done:
+        for name, param in current_model.named_parameters():
+            param_diff = param - prev_model_state[name]
+            l2_diff += torch.sum(param_diff**2)
+            num_params += param.numel()
+    else:
+        for name, param in current_model.named_parameters():
+            if 'policy' in name or 'value' in name:
+                continue
+            param_diff = param - prev_model_state[name]
+            l2_diff += torch.sum(param_diff**2)
+            num_params += param.numel()
+
+        # compute the diff of the policy and value layers separately
+        policy_w_diff = (current_model.policy.original.weight + current_model.policy.new_a.weight - current_model.policy.new_b.weight) - prev_model_state['policy.weight']
+        policy_b_diff = (current_model.policy.original.bias + current_model.policy.new_a.bias - current_model.policy.new_b.bias) - prev_model_state['policy.bias']
+        value_w_diff = (current_model.value.original.weight + current_model.value.new_a.weight - current_model.value.new_b.weight) - prev_model_state['value.weight']
+        value_b_diff = (current_model.value.original.bias + current_model.value.new_a.bias - current_model.value.new_b.bias) - prev_model_state['value.bias']
+
+        l2_diff += torch.sum(policy_w_diff**2) + torch.sum(policy_b_diff**2) + torch.sum(value_w_diff**2) + torch.sum(value_b_diff**2)
+        num_params += prev_model_state['policy.weight'].numel() + prev_model_state['value.weight'].numel() + prev_model_state['policy.bias'].numel() + prev_model_state['value.bias'].numel()
+
+    return torch.sqrt(torch.Tensor(l2_diff) / num_params)
 """------------------------Plasticine------------------------"""
 
 if __name__ == "__main__":
@@ -293,6 +320,7 @@ if __name__ == "__main__":
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
+    pi_done = False
     for iteration in range(1, args.num_iterations + 1):
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
@@ -429,13 +457,13 @@ if __name__ == "__main__":
 
         """------------------------Plasticine------------------------"""
         # plasticity injection at the middle of training
-        if iteration % (args.num_iterations // 2) == 0:
-            # inject plasticity
+        if iteration % (args.num_iterations // 2) == 0:            # inject plasticity
             agent.inject()
+            pi_done = True
         """------------------------Plasticine------------------------"""
 
         # compute the l2 norm difference
-        diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
+        diff_l2_norm = compute_l2_norm_difference(agent, agent_copy, pi_done)
         # compute weight magnitude
         weight_magnitude = compute_weight_magnitude(agent)
 

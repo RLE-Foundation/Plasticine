@@ -1,7 +1,7 @@
-jax[cuda12_pip]
+jax[cuda12_pip]==0.4.30
 distrax
 optax
-flax
+flax==0.8.5
 numpy
 black
 pre-commit

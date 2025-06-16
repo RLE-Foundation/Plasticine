@@ -175,3 +175,5 @@ cython_debug/
 
 *runs*/*
 *wandb*/*
+.vscode
+*logs*/*
