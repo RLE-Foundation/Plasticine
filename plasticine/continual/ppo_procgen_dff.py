@@ -220,7 +220,6 @@ if __name__ == "__main__":
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     # args.num_iterations = args.total_timesteps // args.batch_size
-    args.num_iterations = args.num_rounds * args.num_episodes_per_round
     run_name = f"{args.cont_mode}__{args.exp_name}__{args.seed}__{int(time.time())}"
 
     if args.track:
@@ -252,7 +251,12 @@ if __name__ == "__main__":
 
     """------------------------Plasticine------------------------"""
     # env setup
-    env_ids = ['bigfish', 'caveflyer', 'dodgeball', 'miner', 'starpilot']
+    env_ids = ['bigfish', 'bossfight', 'caveflyer', 'chaser', 'climber', 'coinrun', 'dodgeball', 'fruitbot', 
+               'heist', 'jumper', 'leaper', 'maze', 'miner', 'ninja', 'plunder', 'starpilot']
+    if args.cont_mode == 'task':
+        args.num_iterations = len(env_ids) * args.num_episodes_per_round
+    else:
+        args.num_iterations = args.num_rounds * args.num_episodes_per_round
     envs = ContinualProcgen(
         env_ids=env_ids,
         num_envs=args.num_envs,
