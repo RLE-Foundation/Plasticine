@@ -28,6 +28,7 @@ if __name__=='__main__':
     args = parser.parse_args()
     run(vars(args))
 
+
 optimizer = SAM(
             model.parameters(), 
             optim.SGD, 
@@ -36,3 +37,17 @@ optimizer = SAM(
             momentum=args.momentum,
             rho=args.rho
         )
+  
+# criterion
+criterion = nn.CrossEntropyLoss().to(device)
+
+optimizer.first_step(zero_grad=True)
+                    second_loss = criterion(model(inputs), targets)
+                    second_loss.backward()
+                    optimizer.second_step(zero_grad=True)
+                    
+
+optimizer.first_step(zero_grad=True)
+second_loss = criterion(model(inputs), targets)
+second_loss.backward()
+optimizer.second_step(zero_grad=True)
