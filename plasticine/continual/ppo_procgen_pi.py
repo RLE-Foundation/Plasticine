@@ -223,20 +223,7 @@ class Agent(nn.Module):
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
-        if type(original) == nn.Linear:
-            self.original = original
-        elif type(original) == Injector:
-            self.original = nn.Linear(in_size, out_size)
-            aw = original.original.weight
-            bw = original.new_a.weight
-            cw = original.new_b.weight
-            self.original.weight = nn.Parameter(aw + bw - cw)
-            ab = original.original.bias
-            bb = original.new_a.bias
-            cb = original.new_b.bias
-            self.original.bias = nn.Parameter(ab + bb - cb)
-        else:
-            raise NotImplementedError
+        self.original = original
         self.new_a = nn.Linear(in_size, out_size)
         self.new_b = deepcopy(self.new_a)
 

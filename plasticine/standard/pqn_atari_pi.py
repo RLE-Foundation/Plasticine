@@ -286,6 +286,7 @@ if __name__ == "__main__":
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
+    pi_done = False
     for iteration in range(1, args.num_iterations + 1):
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
@@ -367,7 +368,6 @@ if __name__ == "__main__":
 
         """------------------------Plasticine------------------------"""
         # plasticity injection at the middle of training
-        pi_done = False
         if iteration % (args.num_iterations // 2) == 0:
             # inject plasticity
             q_network.inject()
