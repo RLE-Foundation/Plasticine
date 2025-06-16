@@ -22,7 +22,7 @@ from plasticine.metrics import (compute_dormant_units,
                                 compute_feature_norm, 
                                 compute_feature_variance,
                                 compute_weight_magnitude, 
-                                compute_l2_norm_difference, 
+                                # compute_l2_norm_difference, 
                                 save_model_state
                                 )
 from plasticine.dmc_wrappers import StandardDMC
@@ -101,6 +101,50 @@ def make_env(env_id, seed, idx, capture_video, run_name):
     return thunk
 
 """------------------------Plasticine------------------------"""
+def compute_l2_norm_difference(current_model, prev_model_state, pi_done = False) -> torch.Tensor:
+    """
+    Compute the L2 norm difference between the current model and the previous model state (only for plasticity injection).
+    This is used to measure the change in model parameters.
+
+    Args:
+        current_model (torch.nn.Module): The current model.
+        prev_model_state (Dict): The previous model state.
+        pi_done (bool, optional): Whether the plasticity injection is done. Defaults to False.
+
+    Returns:
+        torch.Tensor: The L2 norm difference between the current model and the previous model state.
+    """
+    l2_diff = 0.0
+    num_params = 0
+
+    if not pi_done:
+        for name, param in current_model.named_parameters():
+            param_diff = param - prev_model_state[name]
+            l2_diff += torch.sum(param_diff**2)
+            num_params += param.numel()
+    else:
+        for name, param in current_model.named_parameters():
+            if 'policy' in name or 'value' in name:
+                continue
+            param_diff = param - prev_model_state[name]
+            l2_diff += torch.sum(param_diff**2)
+            num_params += param.numel()
+
+        # compute the diff of the policy and value layers separately
+        try:
+            policy_w_diff = (current_model.policy.original.weight + current_model.policy.new_a.weight - current_model.policy.new_b.weight) - prev_model_state['policy.weight']
+            policy_b_diff = (current_model.policy.original.bias + current_model.policy.new_a.bias - current_model.policy.new_b.bias) - prev_model_state['policy.bias']
+            l2_diff += torch.sum(policy_w_diff**2) + torch.sum(policy_b_diff**2)
+            num_params += prev_model_state['policy.weight'].numel() + prev_model_state['policy.bias'].numel()
+
+        except:
+            value_w_diff = (current_model.value.original.weight + current_model.value.new_a.weight - current_model.value.new_b.weight) - prev_model_state['value.weight']
+            value_b_diff = (current_model.value.original.bias + current_model.value.new_a.bias - current_model.value.new_b.bias) - prev_model_state['value.bias']
+            l2_diff += torch.sum(value_w_diff**2) + torch.sum(value_b_diff**2)
+            num_params += prev_model_state['value.weight'].numel() + prev_model_state['value.bias'].numel()
+
+    return torch.sqrt(torch.Tensor(l2_diff) / num_params)
+
 class Injector(nn.Module):
     def __init__(self, original, in_size=256, out_size=10):
         super(Injector, self).__init__()
@@ -371,12 +415,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
             
             """------------------------Plasticine------------------------"""
+            pi_done = False
             # plasticity injection at the middle of training
             if global_step % (args.total_timesteps // 2) == 0:
                 # inject plasticity
                 actor.inject()
                 qf1.inject()
                 qf2.inject()
+                pi_done = True
             """------------------------Plasticine------------------------"""
 
             # evaluate the plasticity metrics
@@ -396,7 +442,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
                 # overall metrics
                 weight_magnitude = compute_weight_magnitude(actor) + compute_weight_magnitude(qf1)
-                diff_l2_norm = compute_l2_norm_difference(actor, actor_copy) + compute_l2_norm_difference(qf1, qf1_copy)
+                diff_l2_norm = compute_l2_norm_difference(actor, actor_copy, pi_done) + compute_l2_norm_difference(qf1, qf1_copy, pi_done)
 
                 # log the metrics
                 writer.add_scalar("plasticity/policy_active_units", policy_active_units.item(), global_step)
