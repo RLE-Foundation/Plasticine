@@ -215,10 +215,9 @@ if __name__ == "__main__":
     q_network = QNetwork(envs).to(device)
     # save the initial state of the model
     q_network_copy = save_model_state(q_network)
-    optimizer = optim.RAdam(q_network.parameters(), lr=args.learning_rate)
     """------------------------Plasticine------------------------"""
     # TRAC setup
-    optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', optimizer)(q_network.parameters(), lr=args.learning_rate)
+    optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', torch.optim.RAdam)(q_network.parameters(), lr=args.learning_rate)
     """------------------------Plasticine------------------------"""
 
     # ALGO Logic: Storage setup

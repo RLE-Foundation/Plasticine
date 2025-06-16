@@ -233,14 +233,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     target_actor.load_state_dict(actor.state_dict())
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
-    q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
     """------------------------Plasticine------------------------"""
     # TRAC setup
-    optimizer = start_trac(f'{log_dir}/{run_name}/trac_value.text', q_optimizer)(
+    q_optimizer = start_trac(f'{log_dir}/{run_name}/trac_value.text', optim.Adam)(
         list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
-    actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
-    # TRAC setup
-    optimizer = start_trac(f'{log_dir}/{run_name}/trac_policy.text', actor_optimizer)(
+    optimizer = start_trac(f'{log_dir}/{run_name}/trac_policy.text', optim.Adam)(
         actor.parameters(), lr=args.learning_rate)
     """------------------------Plasticine------------------------"""
 

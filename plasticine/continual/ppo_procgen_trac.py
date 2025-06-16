@@ -261,10 +261,9 @@ if __name__ == "__main__":
     """------------------------Plasticine------------------------"""
 
     agent = Agent(envs).to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     """------------------------Plasticine------------------------"""
     # TRAC setup
-    optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', optimizer)(agent.parameters(), lr=args.learning_rate)
+    optimizer = start_trac(f'{log_dir}/{run_name}/trac.text', optim.Adam, eps=1e-5)(agent.parameters(), lr=args.learning_rate)
     """------------------------Plasticine------------------------"""
 
     # ALGO Logic: Storage setup
