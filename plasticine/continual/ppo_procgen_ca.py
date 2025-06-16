@@ -252,7 +252,8 @@ if __name__ == "__main__":
 
     """------------------------Plasticine------------------------"""
     # env setup
-    env_ids = ['bigfish', 'caveflyer', 'dodgeball', 'miner', 'starpilot']
+    env_ids = ['bigfish', 'bossfight', 'caveflyer', 'chaser', 'climber', 'coinrun', 'dodgeball', 'fruitbot', 
+               'heist', 'jumper', 'leaper', 'maze', 'miner', 'ninja', 'plunder', 'starpilot']
     envs = ContinualProcgen(
         env_ids=env_ids,
         num_envs=args.num_envs,

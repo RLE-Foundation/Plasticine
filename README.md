@@ -2,11 +2,7 @@
 <p align="center"><img align="center" width="500px" src="assets/logo.png"></p>
 
 ## Plasticine: Accelerating Research in Plasticity-Motivated Deep Reinforcement Learning
-<img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> <a href="https://discord.gg/YGApGaXAHW">
-  <img src="https://img.shields.io/badge/Discussion-Discord-5562EA" alt="Discussion Discord"> 
-</a> <a href="https://arxiv.org/pdf/2504.17490">
-  <img src="https://img.shields.io/badge/Paper-arXiv-b31b1b" alt="Paper"> 
-</a> 
+<img src="https://img.shields.io/badge/License-MIT-%230677b8"> <img src="https://img.shields.io/badge/Base-PyTorch-EF4B28"> <img src="https://img.shields.io/badge/Code%20style-Black-000000"> <img src="https://img.shields.io/badge/Python-%3E%3D3.9-%2335709F"> <a href="https://discord.gg/YGApGaXAHW"><img src="https://img.shields.io/badge/Discussion-Discord-5562EA" alt="Discussion Discord"></a> <a href="https://arxiv.org/pdf/2504.17490"><img src="https://img.shields.io/badge/Paper-arXiv-b31b1b" alt="Paper"></a> 
 
 ⚠️⚠️⚠️This project is undergoing fast development and iteration!!!⚠️⚠️⚠️
 
