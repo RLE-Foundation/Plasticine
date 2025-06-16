@@ -164,13 +164,13 @@ class Agent(nn.Module):
         """------------------------Plasticine------------------------"""
         # generate the encoder
         return nn.Sequential(
-            self.layer_init(ParsevalLinear(self.obs_shape[0], 512, 
+            layer_init(ParsevalLinear(self.obs_shape[0], 512, 
                          lambda_reg=self.parseval_lambda, s=self.parseval_s)),
             nn.Tanh(),
-            self.layer_init(ParsevalLinear(512, 512, 
+            layer_init(ParsevalLinear(512, 512, 
                          lambda_reg=self.parseval_lambda, s=self.parseval_s)),
             nn.Tanh(),
-            self.layer_init(ParsevalLinear(512, 512, 
+            layer_init(ParsevalLinear(512, 512, 
                          lambda_reg=self.parseval_lambda, s=self.parseval_s)),
             nn.Tanh()
             )
