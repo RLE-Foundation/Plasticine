@@ -168,8 +168,8 @@ class ContinualDMC:
 
         if mode == 'dynamics':
             self.env_ids = ['quadruped_walk']
-            assert mode == 'dynamics', "Dynamics mode only works with a single environment!"
-            self.current_env_id = env_ids[0]
+            print("Currently, the `dynamics` mode only supports the `quadruped` environment!!!")
+            self.current_env_id = self.env_ids[0]
             self.envs = self.build_env()
 
             self.friction_number = 0
