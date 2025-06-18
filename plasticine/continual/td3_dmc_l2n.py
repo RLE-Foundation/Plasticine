@@ -223,7 +223,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         mode=args.cont_mode,
         seed=args.seed
     )
-    args.total_timesteps = args.num_rounds * args.num_steps_per_round
+    if args.cont_mode == 'task':
+        args.total_timesteps = len(env_ids) * args.num_steps_per_round
+    elif args.cont_mode == 'dynamics':
+        args.total_timesteps = args.num_rounds * args.num_steps_per_round
+    else:
+        raise ValueError("cont_mode must be either `task` or `dynamics`!")
     """------------------------Plasticine------------------------"""
 
     actor = Actor(envs).to(device)
@@ -384,6 +389,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
                 writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)
                 writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
+
+                # save the new model states
+                actor_copy = save_model_state(actor)
+                qf1_copy = save_model_state(qf1)
 
 
             if global_step % 100 == 0:

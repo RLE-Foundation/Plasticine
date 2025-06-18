@@ -461,6 +461,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar("plasticity/weight_magnitude", weight_magnitude.item(), global_step)
                 writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
 
+                # save the new model states
+                actor_copy = save_model_state(actor)
+                qf1_copy = save_model_state(qf1)
+
 
             if global_step % 100 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)

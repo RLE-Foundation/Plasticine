@@ -245,3 +245,6 @@ class ContinualDMC:
         Generate the xml file for the environment.
         """
         pass
+
+    def close(self):
+        self.envs.close()
