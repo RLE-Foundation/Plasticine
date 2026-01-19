@@ -1,9 +1,0 @@
-torch
-gymnasium
-dm-control
-numpy
-tyro
-stable-baselines3
-tensorboard
-imageio
-wandb
