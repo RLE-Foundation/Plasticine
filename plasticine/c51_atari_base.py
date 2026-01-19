@@ -260,8 +260,8 @@ class PlasticineQNetwork(nn.Module):
             The returned mask has True where neurons are dormant and False where they are active.
             """
             masks = []
-            # Last activation are the output values, which are never reset
-            activation_items = list(activations.items())[:-1]
+            # Process all activations from encoder layers (all have ReLU after them)
+            activation_items = list(activations.items())
             
             for name, activation in activation_items:
                 # Taking the mean here conforms to the expectation under D in the main paper's formula
@@ -297,14 +297,21 @@ class PlasticineQNetwork(nn.Module):
                     bound = 1 / np.sqrt(fan_in)
                     layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
 
-        def _reset_dormant_neurons(layers, redo_masks):
-            """Re-initializes the dormant neurons of a model."""
-            assert len(redo_masks) == len(layers) - 1, "Number of masks must match the number of layers - 1"
+        def _reset_dormant_neurons(layers, redo_masks, output_layer):
+            """Re-initializes the dormant neurons of a model.
+            
+            Args:
+                layers: List of (name, layer) tuples for encoder Conv2d/Linear layers
+                redo_masks: List of masks for each layer
+                output_layer: The policy output layer (used as next_layer for the last encoder layer)
+            """
+            assert len(redo_masks) == len(layers), "Number of masks must match the number of layers"
 
-            for i in range(len(layers) - 1):
+            for i in range(len(layers)):
                 mask = redo_masks[i]
                 layer = layers[i][1]
-                next_layer = layers[i + 1][1]
+                # Use output_layer as next_layer for the last encoder layer
+                next_layer = layers[i + 1][1] if i < len(layers) - 1 else output_layer
 
                 # Skip if there are no dormant neurons
                 if torch.all(~mask):
@@ -328,7 +335,7 @@ class PlasticineQNetwork(nn.Module):
             activations = {}
             handles = []
 
-            # Get all Conv2d and Linear layers (skip the Sequential container at index 0)
+            # Get all Conv2d and Linear layers from encoder (all have ReLU after them)
             layers = [(name, layer) for name, layer in list(self.encoder.named_modules())[1:]
                       if isinstance(layer, (nn.Conv2d, nn.Linear))]
 
@@ -344,11 +351,11 @@ class PlasticineQNetwork(nn.Module):
             for handle in handles:
                 handle.remove()
 
-            # Calculate the masks for resetting
+            # Calculate the masks for resetting (all encoder layers)
             masks = _get_redo_masks(activations, tau)
 
-            # Re-initialize the dormant neurons
-            _reset_dormant_neurons(layers, masks)
+            # Re-initialize the dormant neurons (use self.policy as next_layer for last encoder layer)
+            _reset_dormant_neurons(layers, masks, self.policy)
     
     def plasticine_regenerative_regularization(self, rr_weight=0.01):
         """

@@ -1,7 +1,7 @@
-import gymnasium as gym
-import numpy as np
 from typing import Optional, Tuple, Any, List
 
+import gymnasium as gym
+import numpy as np
 
 class ContinualDMC:
     """
@@ -27,8 +27,15 @@ class ContinualDMC:
             'dm_control/dog-walk-v0',
             'dm_control/dog-run-v0',
             'dm_control/dog-trot-v0',
+            'dm_control/dog-stand-v0',
+            'dm_control/dog-walk-v0',
+            'dm_control/dog-run-v0',
+            'dm_control/dog-trot-v0',
         ],
         'walker': [
+            'dm_control/walker-stand-v0',
+            'dm_control/walker-walk-v0',
+            'dm_control/walker-run-v0',
             'dm_control/walker-stand-v0',
             'dm_control/walker-walk-v0',
             'dm_control/walker-run-v0',
@@ -36,7 +43,10 @@ class ContinualDMC:
         'quadruped': [
             'dm_control/quadruped-walk-v0',
             'dm_control/quadruped-run-v0',
-            'dm_control/quadruped-walk-v0',  # Note: third task repeats the first
+            'dm_control/quadruped-walk-v0',
+            'dm_control/quadruped-run-v0',
+            'dm_control/quadruped-walk-v0',
+            'dm_control/quadruped-run-v0',
         ],
     }
     

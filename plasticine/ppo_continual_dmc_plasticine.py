@@ -84,8 +84,8 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
     # Plasticine specific arguments
-    number_of_tasks: int = 3
-    """the number of tasks"""
+    number_of_individual_tasks: int = 0
+    """the number of individual tasks (loaded in runtime)"""
     task_timesteps: int = int(1e6)
     """the timesteps for each task"""
     use_shrink_and_perturb: bool = False
@@ -158,6 +158,9 @@ if __name__ == "__main__":
         num_envs=args.num_envs,
         seed=args.seed,
     )
+    args.number_of_individual_tasks = envs.num_tasks
+    print(f"number of individual tasks: {args.number_of_individual_tasks}")
+    print(f"task list: {envs.get_task_list()}")
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     agent = PlasticineAgent(envs, args).to(device)
@@ -187,13 +190,16 @@ if __name__ == "__main__":
     next_obs = torch.Tensor(next_obs).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
-    # switch task
-    for task_id in range(1, args.number_of_tasks + 1):
+    # switch individual task
+    for task_id in range(1, args.number_of_individual_tasks + 1):
+        """🎯============================== Plasticine Operations ==============================🎯"""
+        # NOTE: switch task
         if task_id > 1:
             envs.switch()
             next_obs, _ = envs.reset(seed=args.seed)
             next_obs = torch.Tensor(next_obs).to(device)
             next_done = torch.zeros(args.num_envs).to(device)
+        """🎯============================== Plasticine Operations ==============================🎯"""
         # individual task training
         for iteration in range(1, args.num_iterations + 1):
             # Annealing the rate if instructed to do so.
@@ -334,7 +340,7 @@ if __name__ == "__main__":
                 if args.use_normalize_and_project:
                     agent.plasticine_normalize_and_project()
                 elif args.use_redo:
-                    agent.plasticine_redo(b_obs[mb_inds], tau=0.025)
+                    agent.plasticine_redo(b_obs, tau=0.025)
                 elif args.use_plasticity_injection:
                     agent.plasticine_plasticity_injection()
             """🎯============================== Plasticine Operations ==============================🎯"""

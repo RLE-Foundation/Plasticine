@@ -1,9 +1,11 @@
+from torch.distributions.normal import Normal
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
 import numpy as np
+import torch.nn.functional as F
 
-from torch.distributions.normal import Normal
-from copy import deepcopy
 
 from plasticine.utils import CReLU4Linear, DFF4Linear, PRLinear, layer_init
 
@@ -229,95 +231,120 @@ class PlasticineAgent(nn.Module):
         Implementation of the Recycling Dormant neurons (ReDo) algorithm.
         Paper: The Dormant Neuron Phenomenon in Deep Reinforcement Learning (https://arxiv.org/pdf/2302.12902)
 
+        This implementation is based on:
+        https://github.com/google/dopamine/blob/ce36aab6528b26a699f5f1cefd330fdaf23a5d72/dopamine/labs/redo/weight_recyclers.py
+
         Args:
             batch_obs (torch.Tensor): A batch of observations.
             tau (float): The threshold for the ReDo operation.
         """
-        def _compute_neuron_scores(model, data):
-            # Create a dictionary to store the s scores for each layer
-            s_scores_dict = {}
+        def _get_activation(name, activations):
+            """Hook function to capture activations with ReLU applied."""
+            def hook(layer, input, output):
+                activations[name] = F.relu(output)
+            return hook
 
-            # Register a forward hook to capture the activations of each layer
-            activations = {}
-            hooks = []
-
-            def hook(module, input, output):
-                activations[module] = output.detach()
-
-            for name, module in model.named_modules():
-                if isinstance(module, torch.nn.ReLU):
-                    handle = module.register_forward_hook(hook)
-                    hooks.append(handle)
-
-            # Forward pass through the model
-            model(data)
-
-            # Calculate the s scores for each layer
-            for name, module in model.named_modules():
-                if isinstance(module, torch.nn.ReLU):
-                    layer_activations = activations[module]
-                    s_scores = layer_activations / (torch.mean(layer_activations, axis=0, keepdim=True) + 1e-6)
-                    s_scores = torch.mean(s_scores, axis=0)
-                    s_scores_dict[name] = s_scores
-
-            # Remove the hooks to prevent memory leaks
-            for handle in hooks:
-                handle.remove()
-
-            return s_scores_dict
-
-        def _reinitialize_weights(module, reset_mask, next_module):
+        def _get_redo_masks(activations, tau):
             """
-            Reinitializes weights and biases of a module based on a reset mask.
-
-            Args:
-                module (torch.nn.Module): The module whose weights are to be reinitialized.
-                reset_mask (torch.Tensor): A boolean tensor indicating which weights to reset.
-                next_module (torch.nn.Module): The next module in the network.
+            Computes the ReDo mask for a given set of activations.
+            The returned mask has True where neurons are dormant and False where they are active.
             """
-            # Reinitialize weights
-            new_weights = torch.empty_like(module.weight.data)
-            torch.nn.init.kaiming_uniform_(new_weights, a=np.sqrt(5))
-            module.weight.data[reset_mask] = new_weights[reset_mask].to(module.weight.device)
+            masks = []
+            # Process all activations from encoder Linear layers (all have ReLU after them)
+            activation_items = list(activations.items())
             
-            # Reinitialize bias if exists
-            if module.bias is not None:
-                new_bias = torch.empty_like(module.bias.data)
-                fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(module.weight)
-                bound = 1 / np.sqrt(fan_in)
-                torch.nn.init.uniform_(new_bias, -bound, bound)
-                module.bias.data[reset_mask] = new_bias[reset_mask].to(module.bias.device)
+            for name, activation in activation_items:
+                # Taking the mean here conforms to the expectation under D in the main paper's formula
+                if activation.ndim == 4:
+                    # Conv layer: average over batch, height, width
+                    score = activation.abs().mean(dim=(0, 2, 3))
+                else:
+                    # Linear layer: average over batch
+                    score = activation.abs().mean(dim=0)
 
-            # Set outgoing weights to zero for reset neurons
-            if next_module is not None:
-                if isinstance(module, nn.Conv2d) and isinstance(next_module, nn.Linear):
-                    # Conv2d -> Flatten -> Linear: need to expand mask
-                    C = reset_mask.shape[0]  # number of channels
-                    spatial_size = next_module.in_features // C  # H * W
-                    expanded_mask = reset_mask.unsqueeze(1).expand(-1, spatial_size).flatten()
-                    next_module.weight.data[:, expanded_mask] = 0.0
-                elif isinstance(next_module, (nn.Linear, nn.Conv2d)):
-                    next_module.weight.data[:, reset_mask] = 0.0
+                # Divide by activation mean to make the threshold independent of the layer size
+                # see https://github.com/google/dopamine/blob/ce36aab6528b26a699f5f1cefd330fdaf23a5d72/dopamine/labs/redo/weight_recyclers.py#L314
+                normalized_score = score / (score.mean() + 1e-9)
+
+                layer_mask = torch.zeros_like(normalized_score, dtype=torch.bool)
+                if tau > 0.0:
+                    layer_mask[normalized_score <= tau] = True
+                else:
+                    layer_mask[torch.isclose(normalized_score, torch.zeros_like(normalized_score))] = True
+                masks.append(layer_mask)
+            return masks
+
+        def _kaiming_uniform_reinit(layer, mask):
+            """Partially re-initializes the weights and bias of a layer according to the Kaiming uniform scheme."""
+            fan_in = nn.init._calculate_correct_fan(tensor=layer.weight, mode="fan_in")
+            gain = nn.init.calculate_gain(nonlinearity="relu", param=np.sqrt(5))
+            std = gain / np.sqrt(fan_in)
+            bound = np.sqrt(3.0) * std
+            layer.weight.data[mask, ...] = torch.empty_like(layer.weight.data[mask, ...]).uniform_(-bound, bound)
+
+            if layer.bias is not None:
+                if fan_in != 0:
+                    bound = 1 / np.sqrt(fan_in)
+                    layer.bias.data[mask, ...] = torch.empty_like(layer.bias.data[mask, ...]).uniform_(-bound, bound)
+
+        def _reset_dormant_neurons(layers, redo_masks, output_layer):
+            """Re-initializes the dormant neurons of a model.
+            
+            Args:
+                layers: List of (name, layer) tuples for encoder Linear layers
+                redo_masks: List of masks for each layer
+                output_layer: The actor output layer (used as next_layer for the last encoder layer)
+            """
+            assert len(redo_masks) == len(layers), "Number of masks must match the number of layers"
+
+            for i in range(len(layers)):
+                mask = redo_masks[i]
+                layer = layers[i][1]
+                # Use output_layer as next_layer for the last encoder layer
+                next_layer = layers[i + 1][1] if i < len(layers) - 1 else output_layer
+
+                # Skip if there are no dormant neurons
+                if torch.all(~mask):
+                    continue
+
+                # 1. Reset the ingoing weights using the initialization distribution
+                _kaiming_uniform_reinit(layer, mask)
+
+                # 2. Reset the outgoing weights to 0
+                if isinstance(layer, nn.Conv2d) and isinstance(next_layer, nn.Linear):
+                    # Special case: Transition from conv to linear layer
+                    num_repetition = next_layer.weight.data.shape[1] // mask.shape[0]
+                    linear_mask = torch.repeat_interleave(mask, num_repetition)
+                    next_layer.weight.data[:, linear_mask] = 0.0
+                else:
+                    # Standard case: layer and next_layer are both conv or both linear
+                    next_layer.weight.data[:, mask, ...] = 0.0
 
         with torch.no_grad():
-            s_scores_dict = _compute_neuron_scores(self.actor_encoder, batch_obs)
-            modules = dict(self.actor_encoder.named_modules())
+            activations = {}
+            handles = []
 
-            # Process each layer in the actor_encoder Sequential
-            layer_names = [name for name, _ in self.actor_encoder.named_modules() if isinstance(_, nn.Linear)]
-            for i, layer_name in enumerate(layer_names):
-                if i < len(layer_names) - 1:
-                    # Find the ReLU activation after this layer
-                    next_layer_name = layer_names[i + 1]
-                    # Find the ReLU between these layers
-                    for relu_name, relu_module in modules.items():
-                        if isinstance(relu_module, nn.ReLU) and layer_name < relu_name < next_layer_name:
-                            s_scores = s_scores_dict[relu_name]
-                            reset_mask = s_scores <= tau
-                            current_layer = modules[layer_name]
-                            next_layer = modules[next_layer_name] if next_layer_name in modules else None
-                            _reinitialize_weights(current_layer, reset_mask, next_layer)
-                            break
+            # Get all Linear layers from actor_encoder (all have ReLU after them)
+            layers = [(name, layer) for name, layer in list(self.actor_encoder.named_modules())
+                      if isinstance(layer, nn.Linear)]
+
+            # Register hooks for all Linear layers
+            for name, module in layers:
+                handle = module.register_forward_hook(_get_activation(name, activations))
+                handles.append(handle)
+
+            # Forward pass to calculate activations
+            _ = self.actor_encoder(batch_obs)
+
+            # Remove the hooks
+            for handle in handles:
+                handle.remove()
+
+            # Calculate the masks for resetting (all encoder layers)
+            masks = _get_redo_masks(activations, tau)
+
+            # Re-initialize the dormant neurons (use self.actor as next_layer for last encoder layer)
+            _reset_dormant_neurons(layers, masks, self.actor)
     
     def plasticine_regenerative_regularization(self, rr_weight=0.01):
         """

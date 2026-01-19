@@ -13,7 +13,7 @@
 - 📊 Benchmarked implementation (13+ algorithms and 6+ plasticity metrics);
 - 🧱 Easy combination of different plasticity enhancement strategies;
 - ⚙️ Local reproducibility via seeding;
-- 🧫 Experiment management with [Weights and Biases]().
+- 🧫 Experiment management with [Weights and Biases](https://wandb.ai/yuanmingqi/Plasticine/reportlist).
 
 > **Plasticine** is built on the top of [CleanRL](https://github.com/vwxyzjn/cleanrl). Thanks for the excellent project!
 
