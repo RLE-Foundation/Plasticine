@@ -16,13 +16,14 @@ from kron_torch import Kron
 
 from plasticine.trac import start_trac
 from plasticine.ppo_continual_procgen_base import PlasticineAgent
-from plasticine.utils import get_exp_name
+from plasticine.utils import get_exp_name, save_model_state
 from plasticine_envs.procgen_wrappers import ContinualProcgenIntraTask
 from plasticine_metrics.metrics import (compute_dormant_units, 
-                                compute_active_units,
-                                compute_stable_rank, 
-                                compute_effective_rank,
-                                )
+                                        compute_active_units,
+                                        compute_stable_rank, 
+                                        compute_effective_rank,
+                                        compute_l2_norm_difference,
+                                        )
 
 @dataclass
 class Args:
@@ -249,6 +250,9 @@ if __name__ == "__main__":
             b_inds = np.arange(args.batch_size)
             clipfracs = []
 
+            total_grad_norm = []
+            agent_copy = save_model_state(agent)
+
             for epoch in range(args.update_epochs):
                 np.random.shuffle(b_inds)
                 for start in range(0, args.batch_size, args.minibatch_size):
@@ -304,7 +308,8 @@ if __name__ == "__main__":
 
                     optimizer.zero_grad()
                     loss.backward()
-                    nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
+                    batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
+                    total_grad_norm.append(batch_grad_norm)
                     optimizer.step()
 
                     """🎯============================== Plasticine Operations ==============================🎯"""
@@ -324,7 +329,6 @@ if __name__ == "__main__":
             # NOTE: after each rollout
             if args.use_normalize_and_project:
                 agent.plasticine_normalize_and_project()
-                print('did normalize and project')
             elif args.use_redo and (iteration % (args.num_iterations // 10) == 0): # redo for 10 times in the task
                 agent.plasticine_redo(b_obs, tau=0.025)
             elif args.use_plasticity_injection and iteration == (args.num_iterations // 2): # inject plasticity in the middle of the task
@@ -353,11 +357,15 @@ if __name__ == "__main__":
                 active_units = compute_active_units(hidden, agent.af_name)
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
+                l2_norm_difference = compute_l2_norm_difference(agent, agent_copy)
+                grad_norm = np.mean(total_grad_norm)    
 
                 writer.add_scalar("plasticity/dormant_units", dormant_units, global_step)
                 writer.add_scalar("plasticity/active_units", active_units, global_step)
                 writer.add_scalar("plasticity/stable_rank", stable_rank, global_step)
                 writer.add_scalar("plasticity/effective_rank", effective_rank, global_step)
+                writer.add_scalar("plasticity/gradient_norm", grad_norm, global_step)
+                writer.add_scalar("plasticity/l2_norm_difference", l2_norm_difference.item(), global_step)
             """🎯============================== Plasticine Operations ==============================🎯"""
 
         """🎯============================== Plasticine Operations ==============================🎯"""

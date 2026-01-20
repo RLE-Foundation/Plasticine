@@ -3,6 +3,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
+from collections import deque
 
 import gymnasium as gym
 import ale_py
@@ -26,13 +27,14 @@ from plasticine_envs.atari_wrappers import (
 from plasticine.buffers import ReplayBuffer
 
 from plasticine.c51_atari_base import PlasticineQNetwork
-from plasticine.utils import get_exp_name
+from plasticine.utils import get_exp_name, save_model_state
 from plasticine.trac import start_trac
 from plasticine_metrics.metrics import (compute_dormant_units, 
-                                compute_active_units,
-                                compute_stable_rank, 
-                                compute_effective_rank,
-                                )
+                                        compute_active_units,
+                                        compute_stable_rank, 
+                                        compute_effective_rank,
+                                        compute_l2_norm_difference,
+                                        )
 
 
 @dataclass
@@ -222,6 +224,8 @@ if __name__ == "__main__":
     # Track if plasticity operations have been applied at mid-training
     plasticity_injection_mid_applied = False
     layer_resetting_mid_applied = False
+    total_grad_norm = deque(maxlen=10)
+    q_network_copy = save_model_state(q_network)
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
@@ -301,6 +305,9 @@ if __name__ == "__main__":
                 # optimize the model
                 optimizer.zero_grad()
                 loss.backward()
+                # get the actor gradient norm but don't clip it
+                actor_grad_norm = torch.nn.utils.clip_grad_norm_(q_network.actor.parameters(), 1e10)
+                total_grad_norm.append(actor_grad_norm)
                 optimizer.step()
 
                 """🎯============================== Plasticine Operations ==============================🎯"""
@@ -345,11 +352,17 @@ if __name__ == "__main__":
                 active_units = compute_active_units(hidden, q_network.af_name)
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
+                diff_l2_norm = compute_l2_norm_difference(q_network, q_network_copy)
+                grad_norm = np.mean(total_grad_norm)
 
                 writer.add_scalar("plasticity/dormant_units", dormant_units, global_step)
                 writer.add_scalar("plasticity/active_units", active_units, global_step)
                 writer.add_scalar("plasticity/stable_rank", stable_rank, global_step)
                 writer.add_scalar("plasticity/effective_rank", effective_rank, global_step)
+                writer.add_scalar("plasticity/gradient_norm", grad_norm, global_step)
+                writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
+
+                q_network_copy = save_model_state(q_network)
             """🎯============================== Plasticine Operations ==============================🎯"""
 
     envs.close()
