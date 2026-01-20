@@ -309,7 +309,7 @@ if __name__ == "__main__":
                     optimizer.zero_grad()
                     loss.backward()
                     batch_grad_norm = nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
-                    total_grad_norm.append(batch_grad_norm)
+                    total_grad_norm.append(batch_grad_norm.item())
                     optimizer.step()
 
                     """🎯============================== Plasticine Operations ==============================🎯"""
