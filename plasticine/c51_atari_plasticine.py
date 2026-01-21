@@ -305,9 +305,9 @@ if __name__ == "__main__":
                 # optimize the model
                 optimizer.zero_grad()
                 loss.backward()
-                # get the actor gradient norm but don't clip it
-                actor_grad_norm = torch.nn.utils.clip_grad_norm_(q_network.actor.parameters(), 1e10)
-                total_grad_norm.append(actor_grad_norm.item())
+                # get the gradient norm but don't clip it
+                batch_grad_norm = torch.nn.utils.clip_grad_norm_(q_network.parameters(), 1e10)
+                total_grad_norm.append(batch_grad_norm.item())
                 optimizer.step()
 
                 """🎯============================== Plasticine Operations ==============================🎯"""
