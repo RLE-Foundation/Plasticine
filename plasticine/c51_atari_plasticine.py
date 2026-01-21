@@ -322,15 +322,13 @@ if __name__ == "__main__":
 
             """🎯============================== Plasticine Operations ==============================🎯"""
             # NOTE: based on environment steps (global_step)
-            # if global_step % args.plasticine_frequency == 0 and global_step > args.learning_starts:
-            if global_step > 4096:
+            if global_step % args.plasticine_frequency == 0 and global_step > args.learning_starts:
                 if args.use_normalize_and_project:
                     q_network.plasticine_normalize_and_project()
                 elif args.use_redo:
                     # Sample a batch from replay buffer for ReDo
                     redo_data = rb.sample(2048)
                     q_network.plasticine_redo(redo_data.observations, tau=0.025)
-                    print('did redo')
             # NOTE: plasticity injection at the middle of training
             if args.use_plasticity_injection and not plasticity_injection_mid_applied and global_step >= args.total_timesteps // 2:
                 q_network.plasticine_plasticity_injection()
