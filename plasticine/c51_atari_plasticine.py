@@ -350,7 +350,11 @@ if __name__ == "__main__":
                 active_units = compute_active_units(hidden, q_network.af_name)
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
-                diff_l2_norm = compute_l2_norm_difference(q_network, q_network_copy)
+                # NOTE: plasticity injection will change the model architecture
+                try:    
+                    diff_l2_norm = compute_l2_norm_difference(q_network, q_network_copy)
+                except:
+                    diff_l2_norm = torch.tensor(0.0).to(device)
                 grad_norm = np.mean(total_grad_norm)
 
                 writer.add_scalar("plasticity/dormant_units", dormant_units, global_step)

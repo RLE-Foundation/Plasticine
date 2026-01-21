@@ -370,7 +370,11 @@ if __name__ == "__main__":
                 active_units = compute_active_units(hidden, agent.af_name)
                 stable_rank = compute_stable_rank(hidden)
                 effective_rank = compute_effective_rank(hidden)
-                l2_norm_difference = compute_l2_norm_difference(agent, agent_copy)
+                # NOTE: plasticity injection will change the model architecture
+                try:    
+                    diff_l2_norm = compute_l2_norm_difference(agent, agent_copy)
+                except:
+                    diff_l2_norm = torch.tensor(0.0).to(device)
                 grad_norm = np.mean(total_grad_norm)
 
                 writer.add_scalar("plasticity/dormant_units", dormant_units, global_step)
@@ -378,7 +382,7 @@ if __name__ == "__main__":
                 writer.add_scalar("plasticity/stable_rank", stable_rank, global_step)
                 writer.add_scalar("plasticity/effective_rank", effective_rank, global_step)
                 writer.add_scalar("plasticity/gradient_norm", grad_norm, global_step)
-                writer.add_scalar("plasticity/l2_norm_difference", l2_norm_difference.item(), global_step)
+                writer.add_scalar("plasticity/l2_norm_difference", diff_l2_norm.item(), global_step)
 
         """🎯============================== Plasticine Operations ==============================🎯"""
         # NOTE: after the whole task is done
