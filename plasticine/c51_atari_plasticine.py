@@ -332,10 +332,12 @@ if __name__ == "__main__":
             # NOTE: plasticity injection at the middle of training
             if args.use_plasticity_injection and not plasticity_injection_mid_applied and global_step >= args.total_timesteps // 2:
                 q_network.plasticine_plasticity_injection()
+                target_network.plasticine_plasticity_injection()
                 plasticity_injection_mid_applied = True
             # NOTE: layer resetting at the middle of training
             if args.use_layer_resetting and not layer_resetting_mid_applied and global_step >= args.total_timesteps // 2:
                 q_network.plasticine_reset_layers(reset_encoder=True, reset_policy=True)
+                target_network.plasticine_reset_layers(reset_encoder=True, reset_policy=True)
                 layer_resetting_mid_applied = True
             """🎯============================== Plasticine Operations ==============================🎯"""
 
