@@ -53,7 +53,7 @@ CUDA_VISIBLE_DEVICES=0 python plasticine/ppo_continual_procgen_plasticine.py \
 ## Architecture and Implementation
 The architecture of Plasticine is as follows:
 
-<img width="100%" src="assets/arch.png">
+<img width="100%" src="assets/overview.png">
 
 ### Plasticine Algorithms
 
