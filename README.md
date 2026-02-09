@@ -90,17 +90,17 @@ The architecture of Plasticine is as follows:
 - Weight Difference
 
 ### Plasticine Environments
-- ALE
+- Standard ALE (Visual observations and discrete control)
 
 <img width="10%" src="assets/demon_attack.gif">
 
 
-- Continual Procgen (Intra-task Switch)
+- Continual Procgen (Visual observations and discrete control)
 
 <img width="50%" src="assets/cont_procgen_ls.png">
 
 
-- Continual DMC (Inter-task Switch)
+- Continual DMC (Proprioceptive observations and continuous control)
 
 <img width="50%" src="assets/cont_dmc_ts.png">
 
