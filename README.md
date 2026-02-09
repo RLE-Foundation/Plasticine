@@ -63,7 +63,7 @@ The architecture of Plasticine is as follows:
   - [ReDo](https://arxiv.org/pdf/2302.12902)
   - [Layer Resetting](https://arxiv.org/pdf/2205.07802)
 
-- Normlization Techniques
+- Normalization Techniques
   - [Layer Normalization](https://arxiv.org/pdf/2402.18762v1)
   - [Normalize-and-Project](https://arxiv.org/pdf/2407.01800) 
 
